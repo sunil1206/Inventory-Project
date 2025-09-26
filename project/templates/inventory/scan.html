@@ -1,0 +1,244 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Scan Item{% endblock %}
+{% block header %}Scan Inventory{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Main Error/Status Display Area -->
+    <div id="main-status-container" class="mb-6"></div>
+
+    <!-- Main UI Card -->
+    <div class="bg-white p-6 rounded-lg shadow-lg mb-8">
+
+        <!-- Step 1: User Choice (Visible by default) -->
+        <div id="choice-container" class="text-center">
+            <p class="text-lg text-gray-600 mb-6">How would you like to find the product?</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button id="show-scanner-btn" class="w-full sm:w-auto bg-green-600 text-white font-bold py-4 px-8 rounded-lg hover:bg-green-700 flex items-center justify-center gap-3 text-lg transition-transform transform hover:scale-105">
+                    <i class="fas fa-camera"></i>
+                    <span>Scan with Camera</span>
+                </button>
+                <button id="show-manual-btn" class="w-full sm:w-auto bg-gray-700 text-white font-bold py-4 px-8 rounded-lg hover:bg-gray-800 flex items-center justify-center gap-3 text-lg transition-transform transform hover:scale-105">
+                    <i class="fas fa-keyboard"></i>
+                    <span>Enter Manually</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scanner UI (Initially Hidden) -->
+        <div id="scanner-ui-container" class="hidden">
+            <div id="reader" class="w-full mx-auto rounded-lg overflow-hidden" style="max-width: 500px;"></div>
+            <div id="scanner-status" class="mt-4 text-center font-semibold text-gray-600"></div>
+            <button id="close-scanner-btn" class="mt-4 w-full max-w-xs mx-auto bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-300 flex items-center justify-center gap-2">
+                <i class="fas fa-arrow-left"></i>
+                <span>Back to Choices</span>
+            </button>
+        </div>
+
+        <!-- Manual Entry UI (Initially Hidden) -->
+        <div id="manual-ui-container" class="hidden">
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="barcode-input" placeholder="Enter barcode manually" class="flex-grow px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                <button id="manual-check-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700">Check</button>
+            </div>
+             <button id="close-manual-btn" class="mt-4 text-sm text-blue-600 hover:underline">Back to Choices</button>
+        </div>
+
+    </div>
+
+    <!-- Scan Mode Toggle -->
+    <div class="mb-6 flex justify-center">
+        <div class="relative flex w-full max-w-xs p-1 bg-gray-200 rounded-full">
+            <span id="glider" class="absolute top-1 left-1 h-10 w-1/2 bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out"></span>
+            <button id="add-mode-btn" class="relative z-10 w-1/2 py-2 text-center font-semibold text-green-600">Add Mode</button>
+            <button id="remove-mode-btn" class="relative z-10 w-1/2 py-2 text-center font-semibold text-gray-500">Remove Mode</button>
+        </div>
+    </div>
+
+    <!-- Dynamic Form Area -->
+    <div id="form-container" class="mt-8">
+        <!-- Form for adding/removing items will be injected here by JavaScript -->
+    </div>
+</div>
+
+{{ supermarket.id|json_script:"supermarket-id" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- State & Config ---
+    let currentMode = 'add';
+    const supermarketId = JSON.parse(document.getElementById('supermarket-id').textContent);
+    const csrfToken = '{{ csrf_token }}';
+    let html5QrcodeScanner;
+
+    // --- DOM Elements ---
+    const mainStatusContainer = document.getElementById('main-status-container');
+    const choiceContainer = document.getElementById('choice-container');
+
+    const showScannerBtn = document.getElementById('show-scanner-btn');
+    const scannerUiContainer = document.getElementById('scanner-ui-container');
+    const closeScannerBtn = document.getElementById('close-scanner-btn');
+
+    const showManualBtn = document.getElementById('show-manual-btn');
+    const manualUiContainer = document.getElementById('manual-ui-container');
+    const closeManualBtn = document.getElementById('close-manual-btn');
+
+    const addModeBtn = document.getElementById('add-mode-btn');
+    const removeModeBtn = document.getElementById('remove-mode-btn');
+    const glider = document.getElementById('glider');
+    const formContainer = document.getElementById('form-container');
+    const scannerStatus = document.getElementById('scanner-status');
+    const barcodeInput = document.getElementById('barcode-input');
+    const manualCheckBtn = document.getElementById('manual-check-btn');
+
+    // --- Event Listeners ---
+    showScannerBtn.addEventListener('click', () => showInterface('scanner'));
+    closeScannerBtn.addEventListener('click', showChoices);
+    showManualBtn.addEventListener('click', () => showInterface('manual'));
+    closeManualBtn.addEventListener('click', showChoices);
+
+    addModeBtn.addEventListener('click', () => setMode('add'));
+    removeModeBtn.addEventListener('click', () => setMode('remove'));
+    manualCheckBtn.addEventListener('click', () => handleBarcode(barcodeInput.value));
+    barcodeInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); handleBarcode(barcodeInput.value); } });
+
+    // --- UI Management ---
+    function showInterface(type) {
+        choiceContainer.classList.add('hidden');
+        if (type === 'scanner') {
+            scannerUiContainer.classList.remove('hidden');
+            startScanner();
+        } else if (type === 'manual') {
+            manualUiContainer.classList.remove('hidden');
+        }
+    }
+
+    function showChoices() {
+        if (html5QrcodeScanner && html5QrcodeScanner.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
+            html5QrcodeScanner.clear().catch(err => console.error("Failed to clear scanner:", err));
+        }
+        scannerUiContainer.classList.add('hidden');
+        manualUiContainer.classList.add('hidden');
+        choiceContainer.classList.remove('hidden');
+        formContainer.innerHTML = '';
+        mainStatusContainer.innerHTML = '';
+        scannerStatus.innerHTML = '';
+    }
+
+    // --- Core Functions ---
+    function onScanSuccess(decodedText, decodedResult) {
+        if (html5QrcodeScanner.getState() === Html5QrcodeScannerState.SCANNING) {
+            html5QrcodeScanner.pause();
+        }
+        scannerStatus.innerHTML = `<p class="text-green-600 font-bold">Scan successful!</p>`;
+        handleBarcode(decodedText);
+    }
+
+    function onScanFailure(error) { /* Keep silent */ }
+
+    function startScanner() {
+        if (location.protocol !== 'https:') {
+            showMainAlert(
+                'Camera Requires a Secure (HTTPS) Connection',
+                'Please run your server with <strong>python manage.py runsslserver</strong> and access via <strong>https://</strong>.'
+            );
+            return;
+        }
+
+        html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        scannerStatus.innerText = "Scanner is active. Point camera at a QR or Barcode.";
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        formContainer.innerHTML = '';
+        mainStatusContainer.innerHTML = '';
+
+        if (html5QrcodeScanner && html5QrcodeScanner.getState() === Html5QrcodeScannerState.PAUSED) {
+            html5QrcodeScanner.resume();
+            scannerStatus.innerText = "Scanner is active. Point camera at a code.";
+        }
+
+        const isAdd = mode === 'add';
+        glider.style.transform = isAdd ? 'translateX(0%)' : 'translateX(100%)';
+        addModeBtn.classList.toggle('text-green-600', isAdd);
+        addModeBtn.classList.toggle('text-gray-500', !isAdd);
+        removeModeBtn.classList.toggle('text-red-600', !isAdd);
+        removeModeBtn.classList.toggle('text-gray-500', isAdd);
+    }
+
+    async function handleBarcode(barcode) {
+        barcode = barcode.trim();
+        if (!barcode) return;
+
+        showMainAlert('Processing...', 'Please wait while we look up the product.', 'info');
+
+        try {
+            const response = await fetch('/api/scan/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ barcode, supermarket_id: supermarketId, mode: 'lookup' })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Request failed');
+
+            mainStatusContainer.innerHTML = ''; // Clear processing message
+
+            if (currentMode === 'add') {
+                renderAddForm(data.product, data.categories);
+            } else { // remove mode
+                if (data.inventory_items && data.inventory_items.length > 0) {
+                    renderRemoveForm(data.inventory_items, data.product);
+                } else {
+                    showMainAlert('Item Not Found', 'This product is not currently in your inventory.', 'error');
+                }
+            }
+        } catch (error) {
+            showMainAlert('API Error', error.message, 'error');
+        }
+    }
+
+    function showMainAlert(title, details, type = 'info') {
+        const colors = {
+            info: { border: 'border-blue-500', bg: 'bg-blue-100', text: 'text-blue-700' },
+            success: { border: 'border-green-500', bg: 'bg-green-100', text: 'text-green-700' },
+            error: { border: 'border-red-500', bg: 'bg-red-100', text: 'text-red-700' }
+        };
+        const alertHtml = `<div class="${colors[type].bg} border-l-4 ${colors[type].border} ${colors[type].text} p-4 rounded-lg"><p class="font-bold">${title}</p><p>${details}</p></div>`;
+        mainStatusContainer.innerHTML = alertHtml;
+    }
+
+    // --- Form Rendering Functions ---
+    function renderAddForm(product, categories) {
+        let categoryOptions = categories.map(cat => `<option value="${cat.id}">${cat.name}</option>`).join('');
+        const formHtml = `<div class="bg-white p-6 rounded-lg shadow-lg"><div class="flex items-center gap-4 mb-6"><img src="${product.image_url || 'https://placehold.co/96x96'}" class="w-24 h-24 object-contain rounded-md border"><p><strong>${product.name}</strong><br>${product.brand||''}</p></div><form id="add-item-form"><div class="space-y-4"><div class="grid md:grid-cols-2 gap-4"><div><label class="block text-sm font-medium">Category</label><select name="category_id" required class="mt-1 w-full p-2 border rounded-md"><option value="">Select...</option>${categoryOptions}</select></div><div><label class="block text-sm font-medium">Your Price (€)</label><input type="number" step="0.01" name="store_price" placeholder="e.g., 3.99" required class="mt-1 w-full p-2 border rounded-md"></div></div><div class="grid md:grid-cols-2 gap-4"><div><label class="block text-sm font-medium">Rack / Zone</label><input type="text" name="rack_zone" required class="mt-1 w-full p-2 border rounded-md"></div><div><label class="block text-sm font-medium">Quantity</label><input type="number" name="quantity" required value="1" min="1" class="mt-1 w-full p-2 border rounded-md"></div></div><div><label class="block text-sm font-medium">Expiry Date</label><input type="date" name="expiry_date" required class="mt-1 w-full p-2 border rounded-md"></div><div><button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg">Add to Inventory</button></div></div></form></div>`;
+        formContainer.innerHTML = formHtml;
+        document.getElementById('add-item-form').addEventListener('submit',async e=>{
+            e.preventDefault();
+            const data=Object.fromEntries(new FormData(e.target).entries());
+            data.barcode=product.barcode; data.supermarket_id=supermarketId; data.mode='add';
+            showMainAlert('Adding item...','Please wait.','info');
+            try{ const res=await fetch('/api/scan/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(data)}); const result=await res.json(); if(!res.ok) throw new Error(result.error); showMainAlert('Success!', 'Item added to inventory.', 'success'); formContainer.innerHTML=''; showChoices();} catch(err){ showMainAlert('Error', err.message, 'error'); }
+        });
+    }
+
+    function renderRemoveForm(items, product) {
+        let itemsHtml = items.map(i=>`<label class="flex items-center p-3 border rounded-lg"><input type="radio" name="inventory_item_id" value="${i.id}" class="h-4 w-4"><div class="ml-3"><p>Expires: ${i.expiry_date} (Qty: ${i.quantity})</p><p>Location: ${i.rack_zone}</p></div></label>`).join('');
+        formContainer.innerHTML=`<div class="bg-white p-6 rounded-lg shadow-lg"><div class="flex items-center gap-4 mb-4"><img src="${product.image_url||'https://placehold.co/96x96'}" class="w-24 h-24 object-contain rounded"><div><h3 class="text-lg font-bold">${product.name}</h3><p class="text-gray-500">${product.brand||''}</p></div></div><form id="remove-item-form"><fieldset class="space-y-2"><legend class="font-semibold mb-2">Select batch to remove:</legend>${itemsHtml}</fieldset><button type="submit" class="mt-4 w-full bg-red-600 text-white font-bold py-3 rounded-lg">Remove from Inventory</button></form></div>`;
+        document.getElementById('remove-item-form').addEventListener('submit',async e=>{
+            e.preventDefault();
+            const item_id=new FormData(e.target).get('inventory_item_id');
+            if(!item_id){ showMainAlert('Selection Required', 'Please select a batch to remove.', 'error'); return; }
+            const data={inventory_item_id:item_id,supermarket_id:supermarketId,mode:'remove'};
+            showMainAlert('Removing item...','Please wait.','info');
+            try{ const res=await fetch('/api/scan/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken},body:JSON.stringify(data)}); const result=await res.json(); if(!res.ok) throw new Error(result.error); showMainAlert('Success!', 'Item removed from inventory.', 'success'); formContainer.innerHTML=''; showChoices();} catch(err){ showMainAlert('Error', err.message, 'error'); }
+        });
+    }
+});
+</script>
+{% endblock %}
+

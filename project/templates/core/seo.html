@@ -1,0 +1,13 @@
+<title>{% block title %} {{ seo_settings.title }} {% endblock %}</title>
+{% block meta_description %} {{ seo_settings.meta_description }}{% endblock %}
+{% block meta_keywords %} {{ seo_settings.meta_keywords }} {% endblock %}
+{% block canonical_url %}
+{% if canonical_url %}
+        <link rel="canonical" href="{{ canonical_url }}">
+    {% endif %}
+{% endblock %}
+
+{% block og_title %} {% endblock %}
+{% block og_description %}  {% endblock %}
+{% block og_url %}  {% endblock %}
+{% block og_image %}  {% endblock %}

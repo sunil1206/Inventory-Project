@@ -1,0 +1,95 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Staff Management{% endblock %}
+{% block header %}Manage Staff for {{ supermarket.name }}{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- List of Current Staff -->
+    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Current Staff Members</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left text-gray-500">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3">User Email</th>
+                        <th scope="col" class="px-6 py-3">Role</th>
+                        <th scope="col" class="px-6 py-3">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- The supermarket owner is implicitly an admin -->
+                    <tr class="bg-white border-b">
+                        <td class="px-6 py-4 font-medium text-gray-900">{{ supermarket.owner.email }}</td>
+                        <td class="px-6 py-4">
+                            <span class="px-2 py-1 font-semibold leading-tight text-purple-700 bg-purple-100 rounded-full">Owner</span>
+                        </td>
+                        <td class="px-6 py-4 text-gray-400">
+                            (Cannot be removed)
+                        </td>
+                    </tr>
+                    {% for staff_member in staff %}
+                    <tr class="bg-white border-b hover:bg-gray-50">
+                        <td class="px-6 py-4 font-medium text-gray-900">{{ staff_member.user.email }}</td>
+                        <td class="px-6 py-4">
+                            {% if staff_member.role == 'ADMIN' %}
+                                <span class="px-2 py-1 font-semibold leading-tight text-blue-700 bg-blue-100 rounded-full">{{ staff_member.get_role_display }}</span>
+                            {% elif staff_member.role == 'MANAGER' %}
+                                <span class="px-2 py-1 font-semibold leading-tight text-green-700 bg-green-100 rounded-full">{{ staff_member.get_role_display }}</span>
+                            {% else %}
+                                <span class="px-2 py-1 font-semibold leading-tight text-gray-700 bg-gray-100 rounded-full">{{ staff_member.get_role_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <!-- Secure Delete Form for Staff -->
+                            <!-- NOTE: You will need to create a `remove_staff` view and URL for this to work -->
+                            <form action="#" method="POST" onsubmit="return confirm('Are you sure you want to remove this staff member?');">
+                                {% csrf_token %}
+                                <button type="submit" class="font-medium text-red-600 hover:underline" title="Remove Staff Member">
+                                    <i class="fas fa-user-minus"></i> Remove
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" class="text-center py-8 text-gray-500">
+                            You have not added any staff members yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Invite New Staff Panel -->
+    <div class="bg-white p-6 rounded-lg shadow-lg h-fit">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Invite New Staff</h2>
+        <p class="text-sm text-gray-600 mb-4">Enter the email address of a user who has already signed up for the application to add them to your supermarket.</p>
+        <form action="{% url 'inventory:staff_management' supermarket.id %}" method="POST" class="space-y-4">
+            {% csrf_token %}
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700">User's Email Address</label>
+                <div class="mt-1">
+                    <input type="email" name="email" id="email" required class="w-full p-2 border border-gray-300 rounded-md" placeholder="user@example.com">
+                </div>
+            </div>
+            <div>
+                <label for="role" class="block text-sm font-medium text-gray-700">Assign Role</label>
+                <select name="role" id="role" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                    <option value="STAFF">Staff</option>
+                    <option value="MANAGER">Manager</option>
+                    <option value="ADMIN">Administrator</option>
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="w-full bg-green-600 text-white font-semibold px-4 py-3 rounded-lg hover:bg-green-700">
+                    <i class="fas fa-user-plus"></i> Add Staff Member
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

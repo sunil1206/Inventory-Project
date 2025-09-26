@@ -1,0 +1,135 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Competitor Prices{% endblock %}
+{% block header %}Competitor Price Analysis{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-lg">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-500">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-6 py-3">Product</th>
+                    <th scope="col" class="px-6 py-3 text-center">Your Price</th>
+                    <th scope="col" class="px-6 py-3 text-center">Lowest Competitor</th>
+                    <th scope="col" class="px-6 py-3 text-center">Difference vs Avg.</th>
+                    <th scope="col" class="px-6 py-3">Insight</th>
+                    <th scope="col" class="px-6 py-3 text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody id="price-table-body">
+                {% for data in product_prices %}
+                <tr class="bg-white border-b hover:bg-gray-50 product-row" data-barcode="{{ data.product.barcode }}">
+                    <td class="px-6 py-4 font-medium text-gray-900 flex items-center gap-3">
+                        <img src="{{ data.product.image_url|default:'https://placehold.co/40x40/e9ecef/343a40?text=N/A' }}" alt="{{ data.product.name }}" class="w-10 h-10 object-contain rounded-md">
+                        <div>
+                            <p class="whitespace-nowrap font-semibold">{{ data.product.name }}</p>
+                            <p class="text-xs text-gray-500">{{ data.product.brand|default:"No Brand" }}</p>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center store-price-cell" data-store-price="{{ data.store_price|default:'0' }}">
+                        {% if data.store_price %}
+                            <span class="font-bold text-lg text-gray-800">€{{ data.store_price|floatformat:2 }}</span>
+                            {% if data.stats.min_price and data.store_price <= data.stats.min_price %}
+                                <span class="best-price-badge ml-1 text-xs bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded-full">Best Price</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-400">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-center min-price-cell">
+                        {% if data.stats.min_price %}
+                            <span class="text-green-600 font-bold text-lg">€{{ data.stats.min_price|floatformat:2 }}</span>
+                        {% else %}
+                            <span class="text-gray-400">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-center difference-cell">
+                        {% if data.difference is not None %}
+                            {% if data.difference > 0 %}
+                                <span class="font-semibold text-red-500">+ €{{ data.difference|floatformat:2 }}</span>
+                            {% else %}
+                                <span class="font-semibold text-green-600">- €{{ data.difference|floatformat:2|slice:"1:" }}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-400">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 insight-cell">
+                        {% if data.store_price and data.stats.avg_price and data.stats.min_price %}
+                             {% if data.store_price <= data.stats.min_price %}
+                                <span class="font-semibold text-green-700">Market Leader</span>
+                            {% elif data.store_price < data.stats.avg_price %}
+                                <span class="font-semibold text-blue-600">Competitive Price</span>
+                            {% else %}
+                                <span class="font-semibold text-red-600">Consider Discounting</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-400">Not available</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                        <button class="refresh-btn bg-blue-100 text-blue-600 text-xs font-semibold px-3 py-1 rounded-full hover:bg-blue-200">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <div class="spinner hidden animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mx-auto"></div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-8 text-gray-500">
+                        <i class="fas fa-search-dollar text-2xl mb-2"></i><br>
+                        No pricing data available. Scan items with a set price to begin analysis.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const priceTableBody = document.getElementById('price-table-body');
+    const csrfToken = '{{ csrf_token }}';
+
+    priceTableBody.addEventListener('click', function(event) {
+        const refreshButton = event.target.closest('.refresh-btn');
+        if (refreshButton) {
+            const productRow = refreshButton.closest('.product-row');
+            const barcode = productRow.dataset.barcode;
+            const spinner = productRow.querySelector('.spinner');
+
+            refreshButton.classList.add('hidden');
+            spinner.classList.remove('hidden');
+
+            fetch(`/api/supermarket/{{ supermarket.id }}/scrape-prices/${barcode}/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
+            })
+            .then(response => {
+                if (response.status === 202) {
+                    // Accepted, now we poll for the result.
+                    // For simplicity in this template, we will just reload after a delay.
+                    // A more advanced implementation would use WebSockets or polling.
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 5000); // Reload after 5 seconds to give the scraper time
+                } else {
+                    return response.json();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to start price analysis.');
+                refreshButton.classList.remove('hidden');
+                spinner.classList.add('hidden');
+            });
+        }
+    });
+});
+</script>
+{% endblock %}
+

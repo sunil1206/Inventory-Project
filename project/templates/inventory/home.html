@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Franprix Inventory - Smart Supermarket Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .swoop {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            overflow: hidden;
+            line-height: 0;
+            transform: rotate(180deg);
+        }
+        .swoop svg {
+            position: relative;
+            display: block;
+            width: calc(100% + 1.3px);
+            height: 150px;
+        }
+        .swoop .shape-fill {
+            fill: #f1f5f9; /* slate-100 */
+        }
+    </style>
+</head>
+<body class="bg-white">
+
+    <!-- Header -->
+    <header class="absolute top-0 left-0 w-full z-30 py-4 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center text-2xl font-bold text-white">
+                <i class="fas fa-barcode mr-3"></i>
+                <span class="text-green-400">Fran</span><span>prix</span>&nbsp;Inventory
+            </div>
+            <nav class="hidden md:flex items-center space-x-8">
+                <a href="#features" class="text-white hover:text-green-300 transition-colors">Features</a>
+                <a href="{% url 'account_login' %}" class="bg-white text-green-600 font-semibold py-2 px-5 rounded-full hover:bg-slate-200 transition-colors">
+                    Sign In
+                </a>
+            </nav>
+            <a href="{% url 'account_login' %}" class="md:hidden bg-white text-green-600 font-semibold py-2 px-4 rounded-full hover:bg-slate-200 transition-colors">
+                Sign In
+            </a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <main class="relative bg-gray-800 text-white pt-32 pb-48">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 class="text-4xl md:text-6xl font-extrabold leading-tight">
+                Reduce Waste. Increase Profit.
+            </h1>
+            <p class="mt-6 max-w-2xl mx-auto text-lg md:text-xl text-gray-300">
+                The smart inventory platform designed for modern supermarkets. Track expiry dates, manage stock with your phone, and make data-driven decisions effortlessly.
+            </p>
+            <div class="mt-10">
+                <a href="{% url 'account_login' %}" class="bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-10 rounded-full text-lg transition-transform transform hover:scale-105 inline-block">
+                    Get Started with Google
+                </a>
+            </div>
+        </div>
+        <!-- Swoop Shape Divider -->
+        <div class="swoop">
+            <svg data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+                <path d="M1200 120L0 120 0 0 1200 0 1200 120z" class="shape-fill"></path>
+            </svg>
+        </div>
+    </main>
+
+    <!-- Features Section -->
+    <section id="features" class="bg-slate-100 py-20">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Everything You Need to Manage Inventory</h2>
+                <p class="mt-4 text-lg text-gray-600">Powerful features built for the fast-paced retail environment.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                    <div class="bg-green-100 text-green-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-bell fa-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Proactive Expiry Alerts</h3>
+                    <p class="text-gray-600">Get daily alerts for items expiring soon, allowing you to discount and sell them before they become waste.</p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                    <div class="bg-green-100 text-green-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-mobile-alt fa-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Mobile Camera Scanning</h3>
+                    <p class="text-gray-600">Use any smartphone to instantly add or remove inventory. No expensive hardware required.</p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                    <div class="bg-green-100 text-green-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-store-alt fa-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Multi-Client Management</h3>
+                    <p class="text-gray-600">Oversee the inventory of multiple client locations from a single, intuitive dashboard.</p>
+                </div>
+                <!-- Feature 4 -->
+                <div class="bg-white p-8 rounded-lg shadow-lg text-center">
+                    <div class="bg-green-100 text-green-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                        <i class="fas fa-chart-line fa-2x"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-2">Insightful Analytics</h3>
+                    <p class="text-gray-600">Visualize your inventory status with powerful charts and reports to identify trends and optimize stock levels.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-400">
+            <p>&copy; {% now "Y" %} Franprix Inventory. All Rights Reserved.</p>
+        </div>
+    </footer>
+
+</body>
+</html>

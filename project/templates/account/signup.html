@@ -1,0 +1,46 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Sign Up{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg">
+    <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Create Your Account</h2>
+
+    <form class="signup" id="signup_form" method="post" action="{% url 'account_signup' %}">
+        {% csrf_token %}
+        
+        <!-- Display any non-field errors here (e.g., "Password mismatch") -->
+        {% if form.non_field_errors %}
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div class="space-y-4 text-left">
+            {% for field in form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                <!-- Render the form field here. allauth provides the necessary classes and attributes -->
+                {{ field }}
+                {% if field.help_text %}
+                <p class="mt-2 text-sm text-gray-500">{{ field.help_text|safe }}</p>
+                {% endif %}
+                {% for error in field.errors %}
+                <p class="mt-2 text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-6">
+            <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700">Sign Up</button>
+        </div>
+
+        <p class="mt-4 text-center text-sm">
+            Already have an account? 
+            <a href="{% url 'account_login' %}" class="text-blue-600 hover:underline">Sign In</a>
+        </p>
+    </form>
+</div>
+{% endblock %}
+

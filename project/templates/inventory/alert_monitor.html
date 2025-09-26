@@ -1,0 +1,126 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Alert Monitor{% endblock %}
+{% block header %}Urgent Items - {{ supermarket.name }}{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Expired Column -->
+    <div class="bg-red-50 rounded-lg p-4">
+        <h2 class="font-bold text-lg text-red-800 mb-4 flex items-center">
+            <i class="fas fa-times-circle mr-2"></i>
+            Expired
+        </h2>
+        <div class="space-y-4">
+            {% for item in urgent_items %}
+                {% if item.status == 'expired' %}
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="p-4">
+                        <div class="flex gap-4">
+                            <img src="{{ item.product.image_url|default:'https://placehold.co/80x80/e9ecef/343a40?text=N/A' }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">
+                            <div class="flex-grow">
+                                <p class="font-bold text-gray-800">{{ item.product.name }}</p>
+                                <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>
+                                <p class="text-sm font-semibold text-red-600 mt-1">
+                                    Expired {{ item.days_since_expiry }} day{{ item.days_since_expiry|pluralize }} ago
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t flex justify-end gap-2">
+                             <button class="text-xs font-semibold bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">Remove from Stock</button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+            {% if not urgent_items|length or not urgent_items|slice:"::|dictsort:'status'|selectattr:'status','equalto','expired'|list|length" %}
+                 <div class="text-center p-4 text-sm text-gray-500">No expired items.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Expires Today/Tomorrow Column -->
+    <div class="bg-yellow-50 rounded-lg p-4">
+        <h2 class="font-bold text-lg text-yellow-800 mb-4 flex items-center">
+            <i class="fas fa-exclamation-circle mr-2"></i>
+            Expires Today / Tomorrow
+        </h2>
+        <div class="space-y-4">
+            {% for item in urgent_items %}
+                {% if item.status == 'expires_today' %}
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="p-4">
+                        <div class="flex gap-4">
+                            <img src="{{ item.product.image_url|default:'https://placehold.co/80x80/e9ecef/343a40?text=N/A' }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">
+                            <div class="flex-grow">
+                                <p class="font-bold text-gray-800">{{ item.product.name }}</p>
+                                <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>
+                                <p class="text-sm font-semibold text-yellow-600 mt-1">
+                                    Expires in {{ item.days_left }} day{{ item.days_left|pluralize }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t flex justify-end gap-2">
+                            <button class="text-xs font-semibold bg-yellow-200 text-yellow-800 px-3 py-1 rounded-full hover:bg-yellow-300">Apply Discount</button>
+                            <button class="text-xs font-semibold bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">Remove</button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+            {% if not urgent_items|length or not urgent_items|slice:"::|dictsort:'status'|selectattr:'status','equalto','expires_today'|list|length" %}
+                 <div class="text-center p-4 text-sm text-gray-500">No items expiring today or tomorrow.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Expires Soon Column -->
+    <div class="bg-orange-50 rounded-lg p-4">
+        <h2 class="font-bold text-lg text-orange-800 mb-4 flex items-center">
+            <i class="fas fa-info-circle mr-2"></i>
+            Expires Soon (2-7 Days)
+        </h2>
+        <div class="space-y-4">
+            {% for item in urgent_items %}
+                {% if item.status == 'expires_soon' %}
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <div class="p-4">
+                        <div class="flex gap-4">
+                            <img src="{{ item.product.image_url|default:'https://placehold.co/80x80/e9ecef/343a40?text=N/A' }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">
+                            <div class="flex-grow">
+                                <p class="font-bold text-gray-800">{{ item.product.name }}</p>
+                                <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>
+                                <p class="text-sm font-semibold text-orange-600 mt-1">
+                                    Expires in {{ item.days_left }} day{{ item.days_left|pluralize }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t flex justify-end gap-2">
+                             <button class="text-xs font-semibold bg-orange-200 text-orange-800 px-3 py-1 rounded-full hover:bg-orange-300">Apply Discount</button>
+                             <button class="text-xs font-semibold bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">Remove</button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+            {% if not urgent_items|length or not urgent_items|slice:"::|dictsort:'status'|selectattr:'status','equalto','expires_soon'|list|length" %}
+                 <div class="text-center p-4 text-sm text-gray-500">No items expiring soon.</div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{% if not urgent_items %}
+<div class="bg-white p-8 rounded-lg shadow-lg text-center mt-6">
+    <div class="text-green-500 mb-4">
+        <i class="fas fa-check-circle fa-3x"></i>
+    </div>
+    <h3 class="text-xl font-bold text-gray-800">No Urgent Items</h3>
+    <p class="text-gray-600 mt-2">Your inventory is in great shape! There are no items that are expired or expiring within the next 7 days.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
