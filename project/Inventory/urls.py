@@ -5,8 +5,8 @@ app_name = 'inventory'
 
 urlpatterns = [
     # --- Page Rendering URLs ---
-    path('', views.landing_page_view, name='landing_page'),
-    path('home/', views.home_view, name='home'),
+    path('', views.home_view, name='home'),
+    # path('home/', views.home_view, name='home'),
     path('supermarket/<int:supermarket_id>/', views.supermarket_dashboard_view, name='supermarket_dashboard'),
     path('supermarket/<int:supermarket_id>/scan/', views.scan_item_page_view, name='scan_item'),
     path('supermarket/<int:supermarket_id>/inventory/', views.inventory_list_view, name='inventory_list'),

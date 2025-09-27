@@ -1,0 +1,69 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Your Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">Your Dashboard</h1>
+        <p class="text-lg text-gray-600">
+            Welcome back, <span class="font-semibold">{{ user.first_name|default:user.username }}</span>!
+        </p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- List of Supermarkets -->
+        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Your Supermarkets</h2>
+            <div class="space-y-4">
+                {% for supermarket in supermarkets %}
+                <!-- This link will take the user to the specific inventory dashboard for this supermarket -->
+                <a href="{% url 'inventory:supermarket_dashboard' supermarket.id %}" class="block p-4 bg-gray-50 rounded-lg hover:bg-green-100 hover:shadow-md transition-all">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="font-semibold text-lg text-gray-900">{{ supermarket.name }}</p>
+                            <p class="text-sm text-gray-500">{{ supermarket.location|default:"No location set" }}</p>
+                        </div>
+                        <div class="flex items-center gap-2 text-gray-400">
+                            <span>Manage</span>
+                            <i class="fas fa-chevron-right"></i>
+                        </div>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="text-center py-8 text-gray-500">
+                    <i class="fas fa-store-slash fa-2x mb-2"></i>
+                    <p>You haven't created any supermarkets yet. Add one to get started!</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Create New Supermarket Form -->
+        <div class="bg-white p-6 rounded-xl shadow-lg h-fit">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Create a New Supermarket</h2>
+            <form action="{% url 'users:dashboard' %}" method="POST" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-700">Supermarket Name</label>
+                    <input type="text" name="name" id="name" required class="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., Franprix Bastille">
+                </div>
+                <div>
+                    <label for="location" class="block text-sm font-medium text-gray-700">Location (Optional)</label>
+                    <input type="text" name="location" id="location" class="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., Paris, France">
+                </div>
+                <div>
+                    <button type="submit" class="w-full bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700">
+                        <i class="fas fa-plus"></i> Add Supermarket
+                    </button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}
+

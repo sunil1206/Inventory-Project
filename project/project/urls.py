@@ -34,7 +34,7 @@ urlpatterns = [
     path('robots.txt', robots_txt, name='robots_txt'),
 path('', include('Inventory.urls')),
 path('accounts/', include('allauth.urls')), # Allauth URLs
-# path('account/', include('account.urls')),
+path('users/', include('users.urls')),
 
 ]
 
