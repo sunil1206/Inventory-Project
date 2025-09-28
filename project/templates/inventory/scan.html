@@ -28,7 +28,7 @@
 
         <!-- Scanner UI (Initially Hidden) -->
         <div id="scanner-ui-container" class="hidden">
-            <div id="reader" class="w-full mx-auto rounded-lg overflow-hidden" style="max-width: 500px;"></div>
+            <div id="reader" class="w-full mx-auto rounded-lg overflow-hidden" style="max-width: 500px; height: 400px;"></div>
             <div id="scanner-status" class="mt-4 text-center font-semibold text-gray-600"></div>
             <button id="close-scanner-btn" class="mt-4 w-full max-w-xs mx-auto bg-gray-200 text-gray-700 font-semibold py-2 rounded-lg hover:bg-gray-300 flex items-center justify-center gap-2">
                 <i class="fas fa-arrow-left"></i>
@@ -66,13 +66,16 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- ✅ include html5-qrcode library -->
+<script src="https://unpkg.com/html5-qrcode/minified/html5-qrcode.min.js"></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // --- State & Config ---
     let currentMode = 'add';
     const supermarketId = JSON.parse(document.getElementById('supermarket-id').textContent);
     const csrfToken = '{{ csrf_token }}';
-    let html5QrcodeScanner;
+    let html5QrCode;  // scanner instance
 
     // --- DOM Elements ---
     const mainStatusContainer = document.getElementById('main-status-container');
@@ -116,9 +119,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function showChoices() {
-        if (html5QrcodeScanner && html5QrcodeScanner.getState() !== Html5QrcodeScannerState.NOT_STARTED) {
-            html5QrcodeScanner.clear().catch(err => console.error("Failed to clear scanner:", err));
+    async function showChoices() {
+        if (html5QrCode) {
+            try {
+                await html5QrCode.stop();
+                html5QrCode.clear();
+            } catch (err) {
+                console.error("Failed to stop scanner:", err);
+            }
         }
         scannerUiContainer.classList.add('hidden');
         manualUiContainer.classList.add('hidden');
@@ -130,17 +138,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Core Functions ---
     function onScanSuccess(decodedText, decodedResult) {
-        if (html5QrcodeScanner.getState() === Html5QrcodeScannerState.SCANNING) {
-            html5QrcodeScanner.pause();
-        }
         scannerStatus.innerHTML = `<p class="text-green-600 font-bold">Scan successful!</p>`;
         handleBarcode(decodedText);
+
+        // pause scanning after first success
+        if (html5QrCode) {
+            html5QrCode.pause();
+        }
     }
 
-    function onScanFailure(error) { /* Keep silent */ }
+    function onScanFailure(error) { /* ignore continuous scan errors */ }
 
     function startScanner() {
-        if (location.protocol !== 'https:') {
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
             showMainAlert(
                 'Camera Requires a Secure (HTTPS) Connection',
                 'Please run your server with <strong>python manage.py runsslserver</strong> and access via <strong>https://</strong>.'
@@ -148,20 +158,24 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-        scannerStatus.innerText = "Scanner is active. Point camera at a QR or Barcode.";
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        html5QrCode.start(
+            { facingMode: "environment" }, // use back camera
+            config,
+            onScanSuccess,
+            onScanFailure
+        ).then(() => {
+            scannerStatus.innerText = "Scanner is active. Point camera at a QR or Barcode.";
+        }).catch(err => {
+            showMainAlert('Camera Error', err.message, 'error');
+        });
     }
 
     function setMode(mode) {
         currentMode = mode;
         formContainer.innerHTML = '';
         mainStatusContainer.innerHTML = '';
-
-        if (html5QrcodeScanner && html5QrcodeScanner.getState() === Html5QrcodeScannerState.PAUSED) {
-            html5QrcodeScanner.resume();
-            scannerStatus.innerText = "Scanner is active. Point camera at a code.";
-        }
 
         const isAdd = mode === 'add';
         glider.style.transform = isAdd ? 'translateX(0%)' : 'translateX(100%)';
@@ -240,5 +254,69 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-{% endblock %}
 
+<script>
+    function startScanner() {
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+        showMainAlert(
+            'Camera Requires a Secure (HTTPS) Connection',
+            'Please run your server with <strong>python manage.py runsslserver</strong> and access via <strong>https://</strong>.'
+        );
+        return;
+    }
+
+    html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        onScanFailure
+    ).then(() => {
+        scannerStatus.innerText = "Scanner is active. Point camera at a QR or Barcode.";
+    }).catch(err => {
+        console.error("Camera start failed:", err);
+        showMainAlert('Camera Error', err.toString(), 'error');
+    });
+}
+
+</script>
+
+
+<script>
+    function startScanner() {
+    const isLocal =
+        location.hostname === 'localhost' ||
+        location.hostname === '127.0.0.1';
+
+    if (location.protocol !== 'https:' && !isLocal) {
+        showMainAlert(
+            'Camera Requires a Secure (HTTPS) Connection',
+            'Please run your server with <strong>python manage.py runsslserver</strong> and access via <strong>https://</strong>, or use <strong>http://127.0.0.1</strong> / <strong>http://localhost</strong> for development.'
+        );
+        return;
+    }
+
+    html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    html5QrCode
+        .start(
+            { facingMode: "environment" },
+            config,
+            onScanSuccess,
+            onScanFailure
+        )
+        .then(() => {
+            scannerStatus.innerText =
+                "📷 Scanner active. Point camera at a QR or Barcode.";
+        })
+        .catch((err) => {
+            console.error("Camera start failed:", err);
+            showMainAlert("Camera Error", err.toString(), "error");
+        });
+}
+
+</script>
+{% endblock %}

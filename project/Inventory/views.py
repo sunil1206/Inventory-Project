@@ -237,6 +237,59 @@ def scan_api(request):
     return Response({'error': 'Invalid mode specified.'}, status=400)
 
 
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def dashboard_stats_api(request, supermarket_id):
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#     today = timezone.now().date()
+#     stats = supermarket.inventory_items.aggregate(total=Sum('quantity'), fresh=Count('id', filter=Q(
+#         expiry_date__gt=today + timezone.timedelta(days=7))), soon=Count('id', filter=Q(expiry_date__gte=today,
+#                                                                                         expiry_date__lte=today + timezone.timedelta(
+#                                                                                             days=7))),
+#                                                   expired=Count('id', filter=Q(expiry_date__lt=today)))
+#     return Response(
+#         {'total_items': stats['total'] or 0, 'fresh_count': stats['fresh'], 'expires_soon_count': stats['soon'],
+#          'expired_count': stats['expired']})
+
+
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated])
+# def urgent_items_api(request, supermarket_id):
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#     today = timezone.now().date()
+#     urgent_items = supermarket.inventory_items.filter(
+#         Q(expiry_date__lt=today) | Q(expiry_date__lte=today + timezone.timedelta(days=7))).select_related(
+#         'product').order_by('expiry_date')
+#     data = []
+#     for item in urgent_items:
+#         days_diff = (item.expiry_date - today).days
+#         data.append({'id': item.id, 'product': {'name': item.product.name, 'brand': item.product.brand,
+#                                                 'image_url': item.product.image_url}, 'quantity': item.quantity,
+#                      'rack_zone': item.rack_zone, 'status': item.status,
+#                      'days_left': days_diff if days_diff >= 0 else 0,
+#                      'days_since_expiry': abs(days_diff) if days_diff < 0 else 0})
+#     return Response(data)
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.db.models import Q, Sum, Avg, Min, Max, Count
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.urls import reverse
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .models import Supermarket, Product, InventoryItem, Category, CompetitorPrice, StaffProfile, Supplier, PricingRule, \
+    Promotion
+from .tasks import scrape_product_task
+from .scraping_utils import get_product_info_cascade
+
+
+# ... (all other views remain the same) ...
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def dashboard_stats_api(request, supermarket_id):
@@ -255,18 +308,34 @@ def dashboard_stats_api(request, supermarket_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def urgent_items_api(request, supermarket_id):
+    """
+    API endpoint for the "Urgent Attention" list on the dashboard.
+    This version now includes the product barcode in the response.
+    """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
     today = timezone.now().date()
     urgent_items = supermarket.inventory_items.filter(
         Q(expiry_date__lt=today) | Q(expiry_date__lte=today + timezone.timedelta(days=7))).select_related(
         'product').order_by('expiry_date')
+
     data = []
     for item in urgent_items:
         days_diff = (item.expiry_date - today).days
-        data.append({'id': item.id, 'product': {'name': item.product.name, 'brand': item.product.brand,
-                                                'image_url': item.product.image_url}, 'quantity': item.quantity,
-                     'rack_zone': item.rack_zone, 'status': item.status,
-                     'days_left': days_diff if days_diff >= 0 else 0,
-                     'days_since_expiry': abs(days_diff) if days_diff < 0 else 0})
+        data.append({
+            'id': item.id,
+            'product': {
+                'name': item.product.name,
+                'brand': item.product.brand,
+                'image_url': item.product.image_url,
+                'barcode': item.product.barcode  # --- FIX: Barcode is now included ---
+            },
+            'quantity': item.quantity,
+            'rack_zone': item.rack_zone,
+            'status': item.status,
+            'days_left': days_diff if days_diff >= 0 else 0,
+            'days_since_expiry': abs(days_diff) if days_diff < 0 else 0
+        })
     return Response(data)
+
+# ... (all other views and API endpoints remain the same) ...
 

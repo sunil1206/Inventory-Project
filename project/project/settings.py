@@ -71,8 +71,30 @@ LOGOUT_REDIRECT_URL = '/accounts/login/' # Redirect to login page after logout
 ACCOUNT_LOGOUT_ON_GET = True # Allows logout via a simple link click
 
 # Allauth Provider Settings (for Google)
+# SOCIALACCOUNT_PROVIDERS = {
+#     'google': {
+#         'SCOPE': [
+#             'profile',
+#             'email',
+#         ],
+#         'AUTH_PARAMS': {
+#             'access_type': 'online',
+#         }
+#     }
+# }
+
+# settings.py
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
+        # For each OAuth based provider, either add a ``SocialApp``
+        # (``socialaccount`` app) containing the required client
+        # credentials, or list them here:
+        'APP': {
+            'client_id': '246099774180-ro0tn78famlu9e9i008l8nsppsnsso5v.apps.googleusercontent.com', # This is optional, you can do it in the admin
+            'secret': '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', # This is optional as well
+            'key': ''
+        },
+        # These are the permissions you are asking the user to grant.
         'SCOPE': [
             'profile',
             'email',
@@ -82,7 +104,6 @@ SOCIALACCOUNT_PROVIDERS = {
         }
     }
 }
-
 SCRAPER_API_KEY = '796f799a12e92a90295ca540f151abe2'
 
 # Celery Configuration
@@ -178,3 +199,5 @@ MEDIA_ROOT =os.path.join(BASE_DIR,'media')
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
