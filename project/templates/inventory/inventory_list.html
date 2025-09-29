@@ -2,10 +2,12 @@
 
 {% block title %}Inventory List - {{ supermarket.name }}{% endblock %}
 
+{% block header %}Inventory Management{% endblock %}
+
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-    <h1 class="text-4xl font-bold text-gray-800">Inventory Management</h1>
-<!--    <a href="inventory:export_inventory_csv' supermarket.id %}" class="inline-flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">-->
+<div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+    <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Inventory List</h1>
+    <a href="{% url 'inventory:export_inventory_csv' supermarket.id %}" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
         <i class="fas fa-file-csv"></i>
         <span>Export to CSV</span>
     </a>
@@ -40,62 +42,67 @@
 
 <!-- Inventory Table -->
 <div class="bg-white rounded-lg shadow-md overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-            <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-            </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-            {% for item in inventory_items %}
-            <tr>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0 h-12 w-12">
-                            <img class="h-12 w-12 rounded-md object-contain" src="{{ item.product.image_url|default:'https://placehold.co/48x48' }}" alt="{{ item.product.name }}">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50 hidden md:table-header-group">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for item in inventory_items %}
+                <tr class="block md:table-row mb-4 md:mb-0 border md:border-none rounded-lg shadow-sm md:shadow-none">
+                    <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell border-b md:border-b-0">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-12 w-12">
+                                <img class="h-12 w-12 rounded-md object-contain" src="{{ item.product.image_url|default:'https://placehold.co/48x48' }}" alt="{{ item.product.name }}">
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900">{{ item.product.name }}</div>
+                                <div class="text-sm text-gray-500">{{ item.product.brand|default:'N/A' }}</div>
+                            </div>
                         </div>
-                        <div class="ml-4">
-                            <div class="text-sm font-medium text-gray-900">{{ item.product.name }}</div>
-                            <div class="text-sm text-gray-500">{{ item.product.brand|default:'N/A' }}</div>
+                    </td>
+                    <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Status:'] before:font-bold before:float-left md:before:content-['']">
+                        {% if item.status == 'fresh' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Fresh</span>
+                        {% elif item.status == 'soon' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Expires Soon</span>
+                        {% elif item.status == 'expired' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Expired</span>
+                        {% endif %}
+                    </td>
+                    <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Quantity:'] before:font-bold before:float-left md:before:content-['']">
+                        <span class="text-sm text-gray-900">{{ item.quantity }}</span>
+                    </td>
+                    <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Expiry_Date:'] before:font-bold before:float-left md:before:content-['']">
+                        <span class="text-sm text-gray-500">{{ item.expiry_date|date:"Y-m-d" }}</span>
+                    </td>
+                    <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left">
+                        <div class="flex items-center justify-end md:justify-start gap-4">
+                            <a href="{% url 'inventory:edit_inventory_item' supermarket.id item.id %}" class="text-blue-600 hover:text-blue-900">Edit</a>
+                            <form method="POST" action="{% url 'inventory:delete_inventory_item' supermarket.id item.id %}" onsubmit="return confirm('Are you sure you want to delete this batch?');">
+                                {% csrf_token %}
+                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                            </form>
                         </div>
-                    </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    {% if item.status == 'fresh' %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Fresh</span>
-                    {% elif item.status == 'soon' %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Expires Soon</span>
-                    {% elif item.status == 'expired' %}
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Expired</span>
-                    {% endif %}
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ item.quantity }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ item.expiry_date|date:"Y-m-d" }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div class="flex items-center gap-4">
-<!--                        <a href=" url 'inventory:product_detail' supermarket.id item.product.barcode %}" class="text-indigo-600 hover:text-indigo-900">Details</a>-->
-                        <a href="{% url 'inventory:edit_inventory_item' supermarket.id item.id %}" class="text-blue-600 hover:text-blue-900">Edit</a>
-                        <form method="POST" action="{% url 'inventory:delete_inventory_item' supermarket.id item.id %}" onsubmit="return confirm('Are you sure you want to delete this batch?');">
-                            {% csrf_token %}
-                            <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
-                    <p class="font-semibold">No inventory items found.</p>
-                    <p>Try adjusting your search filters or add a new item.</p>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                        <p class="font-semibold">No inventory items found.</p>
+                        <p>Try adjusting your search filters or add a new item.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 {% endblock %}
