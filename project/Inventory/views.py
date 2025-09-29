@@ -45,15 +45,242 @@ def scan_item_page_view(request, supermarket_id):
 @login_required
 def inventory_list_view(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
     if request.method == 'POST':
         category_name = request.POST.get('name')
         if category_name:
             Category.objects.get_or_create(name__iexact=category_name, defaults={'name': category_name})
         return redirect('inventory:inventory_list', supermarket_id=supermarket.id)
+
     inventory_items = supermarket.inventory_items.all().select_related('product', 'category')
+    search_query = request.GET.get('q', '')
+    category_filter = request.GET.get('category', '')
+    status_filter = request.GET.get('status', '')
+
+    if search_query:
+        inventory_items = inventory_items.filter(
+            Q(product__name__icontains=search_query) |
+            Q(product__brand__icontains=search_query) |
+            Q(product__barcode__icontains=search_query)
+        )
+
+    if category_filter:
+        inventory_items = inventory_items.filter(category__id=category_filter)
+
+    if status_filter:
+        today = timezone.now().date()
+        if status_filter == 'fresh':
+            inventory_items = inventory_items.filter(expiry_date__gt=today + timezone.timedelta(days=7))
+        elif status_filter == 'soon':
+            inventory_items = inventory_items.filter(expiry_date__gte=today,
+                                                     expiry_date__lte=today + timezone.timedelta(days=7))
+        elif status_filter == 'expired':
+            inventory_items = inventory_items.filter(expiry_date__lt=today)
+
     categories = Category.objects.all()
-    context = {'supermarket': supermarket, 'inventory_items': inventory_items, 'categories': categories}
+    context = {
+        'supermarket': supermarket,
+        'inventory_items': inventory_items,
+        'categories': categories,
+        'search_query': search_query,
+        'category_filter': category_filter,
+        'status_filter': status_filter
+    }
     return render(request, 'inventory/inventory_list.html', context)
+
+
+@login_required
+def edit_inventory_item(request, supermarket_id, item_id):
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    item = get_object_or_404(InventoryItem, pk=item_id, supermarket=supermarket)
+
+    if request.method == 'POST':
+        item.quantity = request.POST.get('quantity', item.quantity)
+        item.expiry_date = request.POST.get('expiry_date', item.expiry_date)
+        item.store_price = request.POST.get('store_price', item.store_price)
+        item.rack_zone = request.POST.get('rack_zone', item.rack_zone)
+        category_id = request.POST.get('category')
+        if category_id:
+            item.category = get_object_or_404(Category, pk=category_id)
+        else:
+            item.category = None
+        item.save()
+        return redirect('inventory:inventory_list', supermarket_id=supermarket.id)
+
+    categories = Category.objects.all()
+    context = {'supermarket': supermarket, 'item': item, 'categories': categories}
+    return render(request, 'inventory/edit_inventory_item.html', context)
+
+
+@login_required
+def export_inventory_csv(request, supermarket_id):
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{supermarket.name}_inventory_{timezone.now().date()}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(
+        ['Barcode', 'Product Name', 'Brand', 'Category', 'Quantity', 'Store Price', 'Expiry Date', 'Rack Zone',
+         'Status'])
+
+    inventory_items = supermarket.inventory_items.all().select_related('product', 'category')
+    for item in inventory_items:
+        writer.writerow([
+            item.product.barcode,
+            item.product.name,
+            item.product.brand,
+            item.category.name if item.category else 'N/A',
+            item.quantity,
+            item.store_price,
+            item.expiry_date,
+            item.rack_zone,
+            item.status
+        ])
+
+    return response
+
+
+# --- NEW ---
+@login_required
+def product_list_view(request, supermarket_id):
+    """
+    Displays a master list of all unique products (the "Product Catalog").
+    Allows for adding products from this list directly to the inventory.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
+    products = Product.objects.all().order_by('name')
+    search_query = request.GET.get('q', '')
+
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(brand__icontains=search_query) |
+            Q(barcode__icontains=search_query)
+        )
+
+    categories = Category.objects.all()
+
+    context = {
+        'supermarket': supermarket,
+        'products': products,
+        'categories': categories,  # For the 'add' modal
+        'search_query': search_query,
+    }
+    return render(request, 'inventory/product_list.html', context)
+
+
+@login_required
+def product_detail_view(request, supermarket_id, product_barcode):
+    """(READ) Displays detailed information about a single product."""
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    product = get_object_or_404(Product, barcode=product_barcode)
+    inventory_items = InventoryItem.objects.filter(supermarket=supermarket, product=product).order_by('expiry_date')
+    competitor_prices = CompetitorPrice.objects.filter(product=product).order_by('price')
+    context = {
+        'supermarket': supermarket,
+        'product': product,
+        'inventory_items': inventory_items,
+        'competitor_prices': competitor_prices,
+    }
+    return render(request, 'inventory/product_detail.html', context)
+
+@require_POST
+@login_required
+def add_inventory_from_product_list(request, supermarket_id, product_barcode):
+    """
+    Handles the form submission from the 'Add to Inventory' modal
+    on the product list page.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    product = get_object_or_404(Product, barcode=product_barcode)
+
+    category = get_object_or_404(Category, id=request.POST.get('category_id')) if request.POST.get(
+        'category_id') else None
+
+    InventoryItem.objects.create(
+        supermarket=supermarket,
+        product=product,
+        category=category,
+        quantity=request.POST.get('quantity', 1),
+        expiry_date=request.POST.get('expiry_date'),
+        rack_zone=request.POST.get('rack_zone', 'N/A'),
+        store_price=request.POST.get('store_price')
+    )
+
+    messages.success(request, f"Successfully added {product.name} to your inventory.")
+    return redirect('inventory:product_list', supermarket_id=supermarket.id)
+
+
+# --- CRUD FOR PRODUCTS ---
+
+@login_required
+def create_product_view(request, supermarket_id):
+    """(CREATE) Displays a form to create a new product in the master catalog."""
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    if request.method == 'POST':
+        barcode = request.POST.get('barcode')
+        name = request.POST.get('name')
+        if not barcode or not name:
+            messages.error(request, "Barcode and Name are required fields.")
+        else:
+            try:
+                Product.objects.create(
+                    barcode=barcode,
+                    name=name,
+                    brand=request.POST.get('brand'),
+                    description=request.POST.get('description')
+                )
+                messages.success(request, f"Product '{name}' was created successfully.")
+                return redirect('inventory:product_list', supermarket_id=supermarket.id)
+            except IntegrityError:
+                messages.error(request, f"A product with barcode '{barcode}' already exists.")
+
+    context = {'supermarket': supermarket}
+    return render(request, 'inventory/product_form.html', context)
+
+
+@login_required
+def edit_product_view(request, supermarket_id, product_barcode):
+    """(UPDATE) Displays a form to edit an existing product's details."""
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    product = get_object_or_404(Product, barcode=product_barcode)
+
+    if request.method == 'POST':
+        product.name = request.POST.get('name', product.name)
+        product.brand = request.POST.get('brand', product.brand)
+        product.description = request.POST.get('description', product.description)
+        product.save()
+        messages.success(request, f"Successfully updated '{product.name}'.")
+        return redirect('inventory:product_detail', supermarket_id=supermarket.id, product_barcode=product.barcode)
+
+    context = {
+        'supermarket': supermarket,
+        'product': product,
+        'is_editing': True  # To differentiate between create and edit in the template
+    }
+    return render(request, 'inventory/product_form.html', context)
+
+from django.contrib import messages
+
+@login_required
+def delete_product_view(request, supermarket_id, product_barcode):
+    """(DELETE) Handles the deletion of a product from the master catalog."""
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    product = get_object_or_404(Product, barcode=product_barcode)
+
+    if request.method == 'POST':
+        product_name = product.name
+        product.delete()
+        messages.success(request, f"Product '{product_name}' was deleted successfully.")
+        return redirect('inventory:product_list', supermarket_id=supermarket.id)
+
+    context = {'supermarket': supermarket, 'product': product}
+    return render(request, 'inventory/product_delete_confirm.html', context)
+
+
+# --- END CRUD FOR PRODUCTS ---
 
 
 @login_required
@@ -196,12 +423,63 @@ def scrape_prices_api(request, supermarket_id, product_barcode):
     return Response({'message': 'Price analysis has started. The results will be updated automatically in a moment.'},
                     status=202)
 
+from django.http import JsonResponse, HttpResponse
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+# Replace your existing product_search_api view with this one.
+def product_search_api(request):
+    """
+    API endpoint for the live product search.
+    Returns both the filtered products and all available categories.
+    """
+    search_query = request.GET.get('q', '').strip()
+    category_id = request.GET.get('category', '')
+
+    products = Product.objects.all().order_by('name')
+
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(brand__icontains=search_query) |
+            Q(barcode__icontains=search_query)
+        )
+
+    # This filter assumes a Product might have a direct category link.
+    # If not, it filters based on its instances in inventory. Adjust if your model is different.
+    if category_id:
+        try:  # Assuming Product has a direct ForeignKey 'category'
+            products = products.filter(category__id=category_id)
+        except:  # Fallback to checking inventory instances if direct link fails
+            products = products.filter(inventory_instances__category__id=category_id).distinct()
+
+    products = products[:20]  # Limit results
+
+    product_data = [{
+        'name': p.name,
+        'brand': p.brand,
+        'barcode': p.barcode,
+        'image_url': p.image_url or '',
+        'category_id': p.category.id if hasattr(p, 'category') and p.category else None
+    } for p in products]
+
+    # Always send all categories so the modal dropdown can be populated
+    all_categories = Category.objects.all().order_by('name')
+    category_data = [{'id': c.id, 'name': c.name} for c in all_categories]
+
+    # Structure the response in the required format
+    response_data = {
+        'products': product_data,
+        'categories': category_data
+    }
+
+    return JsonResponse(response_data)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def scan_api(request):
-    mode, barcode, supermarket_id = request.data.get('mode'), request.data.get('barcode'), request.data.get(
-        'supermarket_id')
+    mode, barcode, supermarket_id = request.data.get('mode'), request.data.get('barcode'), request.data.get('supermarket_id')
     if not all([mode, supermarket_id]): return Response({'error': 'Mode and supermarket_id are required.'}, status=400)
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
     if mode == 'lookup':
@@ -209,32 +487,26 @@ def scan_api(request):
         product, created = Product.objects.get_or_create(barcode=barcode)
         if created or not product.name or "Product " in product.name:
             product_info = get_product_info_cascade(barcode)
-            product.name = product_info.get('name')
-            product.brand = product_info.get('brand')
-            product.image_url = product_info.get('image_url')
-            product.description = product_info.get('description')
-            product.save()
+            if product_info.get('name'):
+                product.name = product_info.get('name')
+                product.brand = product_info.get('brand')
+                product.image_url = product_info.get('image_url')
+                product.description = product_info.get('description')
+                product.save()
         inventory_items = InventoryItem.objects.filter(supermarket=supermarket, product=product)
         categories = list(Category.objects.values('id', 'name'))
-        return Response({'product': {'barcode': product.barcode, 'name': product.name, 'brand': product.brand,
-                                     'image_url': product.image_url},
-                         'inventory_items': [{'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date}
-                                             for item in inventory_items], 'categories': categories})
+        return Response({'product': {'barcode': product.barcode, 'name': product.name, 'brand': product.brand, 'image_url': product.image_url}, 'inventory_items': [{'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date, 'rack_zone': item.rack_zone} for item in inventory_items], 'categories': categories})
     elif mode == 'add':
         product = get_object_or_404(Product, barcode=barcode)
-        category = get_object_or_404(Category, id=request.data.get('category_id')) if request.data.get(
-            'category_id') else None
-        InventoryItem.objects.create(supermarket=supermarket, product=product, category=category,
-                                     quantity=request.data.get('quantity', 1),
-                                     expiry_date=request.data.get('expiry_date'),
-                                     rack_zone=request.data.get('rack_zone', 'N/A'),
-                                     store_price=request.data.get('store_price'))
+        category = get_object_or_404(Category, id=request.data.get('category_id')) if request.data.get('category_id') else None
+        InventoryItem.objects.create(supermarket=supermarket, product=product, category=category, quantity=request.data.get('quantity', 1), expiry_date=request.data.get('expiry_date'), rack_zone=request.data.get('rack_zone', 'N/A'), store_price=request.data.get('store_price'))
         return Response({'message': f'{product.name} added.'}, status=201)
     elif mode == 'remove':
         item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
         item.delete()
         return Response({'message': f'Batch of {item.product.name} removed.'})
     return Response({'error': 'Invalid mode specified.'}, status=400)
+
 
 
 # @api_view(['GET'])
@@ -338,4 +610,6 @@ def urgent_items_api(request, supermarket_id):
     return Response(data)
 
 # ... (all other views and API endpoints remain the same) ...
+
+
 

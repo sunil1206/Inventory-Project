@@ -1,99 +1,101 @@
 {% extends "inventory/base.html" %}
 
-{% block title %}Manage Inventory & Categories{% endblock %}
-{% block header %}Manage Inventory & Categories{% endblock %}
+{% block title %}Inventory List - {{ supermarket.name }}{% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-    <!-- Main Inventory List -->
-    <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">Full Inventory List</h2>
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm text-left text-gray-500">
-                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
-                    <tr>
-                        <th scope="col" class="px-6 py-3">Product</th>
-                        <th scope="col" class="px-6 py-3">Category</th>
-                        <th scope="col" class="px-6 py-3">Location</th>
-                        <th scope="col" class="px-6 py-3 text-center">Qty</th>
-                        <th scope="col" class="px-6 py-3 text-center">Your Price</th>
-                        <th scope="col" class="px-6 py-3">Expiry Date</th>
-                        <th scope="col" class="px-6 py-3">Status</th>
-                        <th scope="col" class="px-6 py-3">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in inventory_items %}
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap flex items-center gap-3">
-                            <img src="{{ item.product.image_url|default:'https://placehold.co/40x40/e9ecef/343a40?text=N/A' }}" alt="{{ item.product.name }}" class="w-10 h-10 object-contain rounded-md">
-                            <div>
-                                <p>{{ item.product.name }}</p>
-                                <p class="text-xs text-gray-500">{{ item.product.brand|default:"No Brand" }}</p>
-                                <p class="text-l">{{ item.product.barcode }}</p>
-                            </div>
-                        </th>
-                        <td class="px-6 py-4">{{ item.category.name|default:"N/A" }}</td>
-                        <td class="px-6 py-4">{{ item.rack_zone }}</td>
-                        <td class="px-6 py-4 text-center">{{ item.quantity }}</td>
-                        <td class="px-6 py-4 text-center font-semibold">
-                            {% if item.store_price %}€{{ item.store_price|floatformat:2 }}{% else %}N/A{% endif %}
-                        </td>
-                        <td class="px-6 py-4">{{ item.expiry_date|date:"Y-m-d" }}</td>
-                        <td class="px-6 py-4">
-                            {% if item.status == 'expired' %}
-                                <span class="px-2 py-1 font-semibold leading-tight text-red-700 bg-red-100 rounded-full">Expired</span>
-                            {% elif item.status == 'expires_today' %}
-                                <span class="px-2 py-1 font-semibold leading-tight text-yellow-700 bg-yellow-100 rounded-full">Expires Today</span>
-                            {% elif item.status == 'expires_soon' %}
-                                <span class="px-2 py-1 font-semibold leading-tight text-orange-700 bg-orange-100 rounded-full">Expires Soon</span>
-                            {% else %}
-                                <span class="px-2 py-1 font-semibold leading-tight text-green-700 bg-green-100 rounded-full">Fresh</span>
-                            {% endif %}
-                        </td>
-                        <td class="px-6 py-4">
-                            <!-- Secure Delete Form -->
-                            <form action="{% url 'inventory:delete_item' supermarket.id item.id %}" method="POST" onsubmit="return confirm('Are you sure you want to delete this item batch?');">
-                                {% csrf_token %}
-                                <button type="submit" class="font-medium text-red-600 hover:underline" title="Delete Item">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center py-8 text-gray-500">
-                            Your inventory is empty. Start by scanning new items from the "Scan Item" page.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Category Management Panel -->
-    <div class="bg-white p-6 rounded-lg shadow-lg h-fit">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">Manage Categories</h2>
-        <form action="{% url 'inventory:inventory_list' supermarket.id %}" method="POST" class="mb-6">
-            {% csrf_token %}
-            <label for="name" class="block text-sm font-medium text-gray-700">New Category Name</label>
-            <div class="mt-1 flex gap-2">
-                <input type="text" name="name" id="name" required class="flex-grow p-2 border border-gray-300 rounded-md" placeholder="e.g., Boissons">
-                <button type="submit" class="bg-green-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-green-700">Add</button>
-            </div>
-        </form>
-        <h3 class="font-semibold mb-2 text-gray-700">Existing Categories:</h3>
-        <div class="space-y-2 max-h-60 overflow-y-auto">
-             {% for category in categories %}
-            <div class="bg-gray-100 p-2 rounded-md text-sm text-gray-800">{{ category.name }}</div>
-            {% empty %}
-            <p class="text-sm text-gray-500">No categories created yet.</p>
-            {% endfor %}
-        </div>
-    </div>
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-4xl font-bold text-gray-800">Inventory Management</h1>
+<!--    <a href="inventory:export_inventory_csv' supermarket.id %}" class="inline-flex items-center gap-2 bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">-->
+        <i class="fas fa-file-csv"></i>
+        <span>Export to CSV</span>
+    </a>
 </div>
-{% endblock %}
 
+<!-- Search and Filter Form -->
+<div class="bg-white p-4 rounded-lg shadow-md mb-6">
+    <form method="GET" action="{% url 'inventory:inventory_list' supermarket.id %}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <!-- Search Input -->
+        <div class="md:col-span-2">
+            <label for="q" class="block text-sm font-medium text-gray-700">Search by Name, Brand, or Barcode</label>
+            <input type="text" name="q" id="q" value="{{ search_query|default:'' }}" class="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., Milk, Coca-Cola, 8000500310427">
+        </div>
+
+        <!-- Category Filter -->
+        <div>
+            <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
+            <select name="category" id="category" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if category_filter == cat.id|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Submit Button -->
+        <div>
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg hover:bg-blue-700">Filter</button>
+        </div>
+    </form>
+</div>
+
+<!-- Inventory Table -->
+<div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+            {% for item in inventory_items %}
+            <tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 h-12 w-12">
+                            <img class="h-12 w-12 rounded-md object-contain" src="{{ item.product.image_url|default:'https://placehold.co/48x48' }}" alt="{{ item.product.name }}">
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">{{ item.product.name }}</div>
+                            <div class="text-sm text-gray-500">{{ item.product.brand|default:'N/A' }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    {% if item.status == 'fresh' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Fresh</span>
+                    {% elif item.status == 'soon' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Expires Soon</span>
+                    {% elif item.status == 'expired' %}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Expired</span>
+                    {% endif %}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ item.quantity }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ item.expiry_date|date:"Y-m-d" }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div class="flex items-center gap-4">
+<!--                        <a href=" url 'inventory:product_detail' supermarket.id item.product.barcode %}" class="text-indigo-600 hover:text-indigo-900">Details</a>-->
+                        <a href="{% url 'inventory:edit_inventory_item' supermarket.id item.id %}" class="text-blue-600 hover:text-blue-900">Edit</a>
+                        <form method="POST" action="{% url 'inventory:delete_inventory_item' supermarket.id item.id %}" onsubmit="return confirm('Are you sure you want to delete this batch?');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="px-6 py-12 text-center text-gray-500">
+                    <p class="font-semibold">No inventory items found.</p>
+                    <p>Try adjusting your search filters or add a new item.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
