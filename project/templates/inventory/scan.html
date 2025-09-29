@@ -21,7 +21,7 @@
 
 <div class="max-w-4xl mx-auto">
     <div class="text-center mb-8">
-        <h1 class="text-4xl font-bold text-gray-800">Add to Inventory</h1>
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Add to Inventory</h1>
         <p class="text-lg text-gray-500 mt-2">Choose your preferred method to find a product.</p>
     </div>
 
@@ -29,7 +29,7 @@
     <div id="main-status-container" class="mb-6"></div>
 
     <!-- Main Content Area -->
-    <div class="bg-white p-6 rounded-2xl shadow-lg min-h-[450px]">
+    <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-lg min-h-[450px]">
 
         <!-- Step 1: Mode Selection (Default View) -->
         <div id="choice-container">
@@ -74,9 +74,9 @@
             <!-- 2. Manual Entry Mode -->
             <div id="mode-manual" class="hidden">
                  <h2 class="text-2xl font-bold mb-4">Manual Barcode Entry</h2>
-                 <form id="manual-lookup-form" class="flex space-x-2">
+                 <form id="manual-lookup-form" class="flex flex-col sm:flex-row gap-2 sm:space-x-2">
                      <input type="text" name="barcode" id="manual-barcode" class="flex-grow p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 9780321765723">
-                     <button type="submit" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 flex items-center">
+                     <button type="submit" class="px-6 py-3 sm:py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 flex items-center justify-center">
                          <i class="fas fa-search mr-2"></i>Look Up
                      </button>
                  </form>
@@ -115,32 +115,33 @@
                 <h3 class="text-2xl leading-6 font-bold text-gray-900" id="modal-product-name">Add Product</h3>
                 <button onclick="closeAddModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
             </div>
+            <!-- ✅ IMAGE UNCOMMENTED AND WILL BE POPULATED BY JAVASCRIPT -->
             <div class="text-center mb-4">
-                <img id="modal-product-image" src="{{ product.image_url|default:'https://placehold.co/300x300/F7F7F7/CCC?text=No+Image' }}" alt="Product Image" class="w-32 h-32 object-contain mx-auto rounded-md border bg-white">
+                <img id="modal-product-image" src="https://placehold.co/200x200?text=Product" alt="Product Image" class="w-32 h-32 object-contain mx-auto rounded-md border bg-white">
             </div>
             <div class="mt-2 px-7 py-3">
                 <form id="add-inventory-form">
                     {% csrf_token %}
                     <div class="space-y-4 text-left">
                         <div>
-                            <label for="id_quantity" class="block text-sm font-medium text-gray-700">Quantity</label>
-                            <input type="number" name="quantity" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700">Quantity</label>
+                            <input type="number" name="quantity" value="1" min="1" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
-                            <label for="id_expiry_date" class="block text-sm font-medium text-gray-700">Expiry Date</label>
+                            <label class="block text-sm font-medium text-gray-700">Expiry Date</label>
                             <input type="date" name="expiry_date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
-                            <label for="id_store_price" class="block text-sm font-medium text-gray-700">Store Price (EUR)</label>
-                            <input type="number" step="0.01" name="store_price" required placeholder="0.00" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700">Store Price (EUR)</label>
+                            <input type="number" step="0.01" name="store_price" placeholder="0.00" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
-                            <label for="id_rack_zone" class="block text-sm font-medium text-gray-700">Rack / Location</label>
-                            <input type="text" name="rack_zone" required placeholder="e.g., Aisle 5, Shelf 3" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700">Rack / Location</label>
+                            <input type="text" name="rack_zone" placeholder="e.g., Aisle 5, Shelf 3" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                          <div>
-                            <label for="modal-category-select" class="block text-sm font-medium text-gray-700">Category</label>
-                            <select name="category_id" id="modal-category-select" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700">Category</label>
+                            <select name="category_id" id="modal-category-select" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                                 <!-- Populated by JS -->
                             </select>
                         </div>
@@ -177,6 +178,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const scannerStatus = document.getElementById('scanner-status');
     const mainStatusContainer = document.getElementById('main-status-container');
     const scanResult = document.getElementById('scan-result');
+    const modalProductImage = document.getElementById('modal-product-image'); // Get the image element
 
     // --- State & Config ---
     let html5QrCode;
@@ -216,6 +218,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function openAddModal(product, categories) {
         productForModal = product;
         modalProductName.textContent = `Add "${product.name}"`;
+        // ✅ SET THE IMAGE SOURCE DYNAMICALLY
+        modalProductImage.src = product.image_url || 'https://placehold.co/200x200?text=No+Image';
 
         let categoryOptions = categories.map(cat => `<option value="${cat.id}" ${cat.id === product.category_id ? 'selected' : ''}>${cat.name}</option>`).join('');
         modalCategorySelect.innerHTML = `<option value="">Select a category...</option>${categoryOptions}`;
@@ -311,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Mode 2: Manual Entry ---
-    window.handleManualLookup = function(event) {
+    function handleManualLookup(event) {
         event.preventDefault();
         const barcode = document.getElementById('manual-barcode').value;
         if (barcode) {
@@ -335,7 +339,6 @@ document.addEventListener('DOMContentLoaded', function() {
             searchResultsContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin fa-2x text-gray-400"></i></div>`;
 
             try {
-                // NOTE: You need to create this API endpoint
                 const url = `{% url 'inventory:product_search_api' %}?q=${encodeURIComponent(query)}&category=${encodeURIComponent(categoryId)}`;
                 const response = await fetch(url);
                 if (!response.ok) throw new Error('Search request failed');
