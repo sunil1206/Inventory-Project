@@ -1,6 +1,6 @@
 {% extends "inventory/base.html" %}
 
-{% block title %}Add Item to Inventory{% endblock %}
+{% block title %}Scan & Manage Inventory{% endblock %}
 
 {% block content %}
 <style>
@@ -35,21 +35,21 @@
         <div id="choice-container">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Scan with Camera Card -->
-                <div onclick="switchMode('scan')" id="select-scan" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
+                <div id="select-scan" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
                     <i class="fas fa-camera text-5xl text-blue-500 group-hover:text-blue-600 mb-4"></i>
                     <h2 class="text-2xl font-bold text-gray-800">Scan with Camera</h2>
                     <p class="text-gray-500 mt-2">Use your device's camera to instantly scan a barcode.</p>
                 </div>
 
                 <!-- Manual Entry Card -->
-                <div onclick="switchMode('manual')" id="select-manual" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
+                <div id="select-manual" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
                     <i class="fas fa-keyboard text-5xl text-blue-500 group-hover:text-blue-600 mb-4"></i>
                     <h2 class="text-2xl font-bold text-gray-800">Enter Manually</h2>
                     <p class="text-gray-500 mt-2">Type in a product's barcode number to look it up.</p>
                 </div>
             </div>
              <!-- Search Products Card (Full Width) -->
-            <div onclick="switchMode('search')" id="select-search" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center mt-6">
+            <div id="select-search" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center mt-6">
                 <i class="fas fa-search text-5xl text-blue-500 group-hover:text-blue-600 mb-4"></i>
                 <h2 class="text-2xl font-bold text-gray-800">Search Product List</h2>
                 <p class="text-gray-500 mt-2">Find a product by name, brand, or barcode from your existing list.</p>
@@ -58,7 +58,7 @@
 
         <!-- Interface Panes (Initially Hidden) -->
         <div id="interface-panes" class="hidden">
-            <button onclick="showChoices()" class="mb-4 text-sm font-semibold text-blue-600 hover:underline"><i class="fas fa-arrow-left mr-2"></i>Back to Choices</button>
+            <button id="back-to-choices-btn" class="mb-4 text-sm font-semibold text-blue-600 hover:underline"><i class="fas fa-arrow-left mr-2"></i>Back to Choices</button>
 
             <!-- 1. Scan with Camera Mode -->
             <div id="mode-scan" class="hidden">
@@ -113,9 +113,8 @@
         <div class="mt-3">
              <div class="flex justify-between items-center mb-4">
                 <h3 class="text-2xl leading-6 font-bold text-gray-900" id="modal-product-name">Add Product</h3>
-                <button onclick="closeAddModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
             </div>
-            <!-- ✅ IMAGE UNCOMMENTED AND WILL BE POPULATED BY JAVASCRIPT -->
             <div class="text-center mb-4">
                 <img id="modal-product-image" src="https://placehold.co/200x200?text=Product" alt="Product Image" class="w-32 h-32 object-contain mx-auto rounded-md border bg-white">
             </div>
@@ -125,11 +124,11 @@
                     <div class="space-y-4 text-left">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Quantity</label>
-                            <input type="number" name="quantity" value="1" min="1" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <input type="number" name="quantity" id="modal-quantity" value="1" min="1"  class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Expiry Date</label>
-                            <input type="date" name="expiry_date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <input type="date" name="expiry_date" id="modal-expiry-date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Store Price (EUR)</label>
@@ -147,7 +146,7 @@
                         </div>
                     </div>
                     <div class="flex items-center space-x-4 mt-6">
-                        <button type="button" onclick="closeAddModal()" class="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
+                        <button type="button" id="cancel-modal-btn" class="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
                         <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700">Add Item</button>
                     </div>
                 </form>
@@ -177,18 +176,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchResultsContainer = document.getElementById('product-search-results');
     const scannerStatus = document.getElementById('scanner-status');
     const mainStatusContainer = document.getElementById('main-status-container');
-    const scanResult = document.getElementById('scan-result');
-    const modalProductImage = document.getElementById('modal-product-image'); // Get the image element
+    const modalProductImage = document.getElementById('modal-product-image');
 
     // --- State & Config ---
     let html5QrCode;
-    let productForModal = null; // Holds product data for the modal form
+    let productForModal = null;
     const supermarketId = {{ supermarket.id }};
     const csrfToken = '{{ csrf_token }}';
 
     // --- Core UI Logic ---
-    window.switchMode = function(selectedMode) {
-        mainStatusContainer.innerHTML = ''; // Clear status messages
+    function switchMode(selectedMode) {
+        mainStatusContainer.innerHTML = '';
         choiceContainer.classList.add('hidden');
         interfacePanes.classList.remove('hidden');
         allModeDivs.forEach(div => div.classList.add('hidden'));
@@ -198,12 +196,22 @@ document.addEventListener('DOMContentLoaded', function() {
         else stopScanner();
     }
 
-    window.showChoices = function() {
+    function showChoices() {
         interfacePanes.classList.add('hidden');
         choiceContainer.classList.remove('hidden');
         mainStatusContainer.innerHTML = '';
         stopScanner();
     }
+
+    // --- Event Listeners ---
+    document.getElementById('select-scan').addEventListener('click', () => switchMode('scan'));
+    document.getElementById('select-manual').addEventListener('click', () => switchMode('manual'));
+    document.getElementById('select-search').addEventListener('click', () => switchMode('search'));
+    document.getElementById('back-to-choices-btn').addEventListener('click', showChoices);
+    manualLookupForm.addEventListener('submit', handleManualLookup);
+    modalForm.addEventListener('submit', handleModalFormSubmit);
+    document.getElementById('close-modal-btn').addEventListener('click', closeAddModal);
+    document.getElementById('cancel-modal-btn').addEventListener('click', closeAddModal);
 
     function showMainAlert(title, details, type = 'info') {
         const colors = {
@@ -218,16 +226,24 @@ document.addEventListener('DOMContentLoaded', function() {
     function openAddModal(product, categories) {
         productForModal = product;
         modalProductName.textContent = `Add "${product.name}"`;
-        // ✅ SET THE IMAGE SOURCE DYNAMICALLY
         modalProductImage.src = product.image_url || 'https://placehold.co/200x200?text=No+Image';
 
         let categoryOptions = categories.map(cat => `<option value="${cat.id}" ${cat.id === product.category_id ? 'selected' : ''}>${cat.name}</option>`).join('');
         modalCategorySelect.innerHTML = `<option value="">Select a category...</option>${categoryOptions}`;
 
+        const expiryDateInput = document.getElementById('modal-expiry-date');
+        const quantityInput = document.getElementById('modal-quantity');
+        const today = new Date().toISOString().split('T')[0];
+        expiryDateInput.setAttribute('min', today);
+        const nextWeek = new Date();
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        expiryDateInput.value = nextWeek.toISOString().split('T')[0];
+        setTimeout(() => quantityInput.focus(), 100);
+
         modal.classList.remove('hidden');
     }
 
-    window.closeAddModal = function() {
+    function closeAddModal() {
         modal.classList.add('hidden');
         modalForm.reset();
         productForModal = null;
@@ -238,7 +254,6 @@ document.addEventListener('DOMContentLoaded', function() {
         event.preventDefault();
         const formData = new FormData(event.target);
         const data = Object.fromEntries(formData.entries());
-
         data.barcode = productForModal.barcode;
         data.supermarket_id = supermarketId;
         data.mode = 'add';
@@ -255,12 +270,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await res.json();
             if (!res.ok) throw new Error(result.error || 'Failed to add item.');
             showMainAlert('Success!', `"${productForModal.name}" was added to inventory.`, 'success');
-            showChoices(); // Return to main screen
+            showChoices();
         } catch (err) {
             showMainAlert('Error', err.message, 'error');
         }
     }
-    modalForm.addEventListener('submit', handleModalFormSubmit);
 
     // --- API & Interaction Logic ---
     async function lookupBarcode(barcode) {
@@ -289,8 +303,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Mode 1: Scanner ---
-    function onScanSuccess(decodedText, decodedResult) {
-        scanResult.innerHTML = `<p class="text-green-600">✅ Success! Scanned: ${decodedText}</p>`;
+    function onScanSuccess(decodedText) {
+        document.getElementById('scan-result').innerHTML = `<p class="text-green-600">✅ Success! Scanned: ${decodedText}</p>`;
         stopScanner();
         lookupBarcode(decodedText);
     }
@@ -322,34 +336,36 @@ document.addEventListener('DOMContentLoaded', function() {
             lookupBarcode(barcode);
         }
     }
-    manualLookupForm.addEventListener('submit', handleManualLookup);
 
     // --- Mode 3: Product Search ---
     let searchTimeout;
-    async function handleProductSearch() {
+    const debouncedSearch = () => {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(async () => {
-            const query = searchInput.value;
-            const categoryId = categoryFilter.value;
-            if (query.length < 2 && !categoryId) {
-                searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Start typing to search or select a category.</p>`;
-                return;
-            }
+        searchTimeout = setTimeout(performProductSearch, 300);
+    };
+    searchInput.addEventListener('input', debouncedSearch);
+    categoryFilter.addEventListener('change', debouncedSearch);
 
-            searchResultsContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin fa-2x text-gray-400"></i></div>`;
+    async function performProductSearch() {
+        const query = searchInput.value;
+        const categoryId = categoryFilter.value;
+        if (query.length < 2 && !categoryId) {
+            searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Start typing to search or select a category.</p>`;
+            return;
+        }
 
-            try {
-                const url = `{% url 'inventory:product_search_api' %}?q=${encodeURIComponent(query)}&category=${encodeURIComponent(categoryId)}`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('Search request failed');
+        searchResultsContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin fa-2x text-gray-400"></i></div>`;
 
-                const data = await response.json();
-                renderSearchResults(data.products, data.categories);
-            } catch (error) {
-                 searchResultsContainer.innerHTML = `<p class="text-center text-red-500 py-8">${error.message}</p>`;
-            }
+        try {
+            const url = `{% url 'inventory:product_search_api' %}?q=${encodeURIComponent(query)}&category=${encodeURIComponent(categoryId)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Search request failed');
 
-        }, 300);
+            const data = await response.json();
+            renderSearchResults(data.products, data.categories);
+        } catch (error) {
+             searchResultsContainer.innerHTML = `<p class="text-center text-red-500 py-8">${error.message}</p>`;
+        }
     }
 
     function renderSearchResults(products, categories) {
@@ -357,7 +373,6 @@ document.addEventListener('DOMContentLoaded', function() {
             searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">No products found.</p>`;
             return;
         }
-
         const productsHtml = products.map(product => `
             <div class="flex items-center p-2 bg-gray-50 rounded-md hover:bg-gray-100">
                 <img src="${product.image_url || 'https://placehold.co/48x48'}" class="w-12 h-12 rounded-md mr-4 object-contain border">
@@ -371,7 +386,6 @@ document.addEventListener('DOMContentLoaded', function() {
         searchResultsContainer.innerHTML = productsHtml;
     }
 
-    // Event delegation for search result buttons
     searchResultsContainer.addEventListener('click', function(e) {
         if (e.target && e.target.classList.contains('add-from-search-btn')) {
             const product = JSON.parse(e.target.dataset.product);
@@ -379,9 +393,6 @@ document.addEventListener('DOMContentLoaded', function() {
             openAddModal(product, categories);
         }
     });
-
-    searchInput.addEventListener('input', handleProductSearch);
-    categoryFilter.addEventListener('change', handleProductSearch);
 });
 </script>
 {% endblock %}

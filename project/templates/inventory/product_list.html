@@ -7,9 +7,17 @@
 {% block content %}
 <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
     <h1 class="text-3xl md:text-4xl font-bold text-gray-800">Product Catalog</h1>
-    <a href="{% url 'inventory:create_product' supermarket.id %}" class="w-full sm:w-auto px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors flex items-center justify-center">
-        <i class="fas fa-plus mr-2"></i>Create New Product
-    </a>
+    <div class="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
+        <button id="scan-product-btn" class="w-full sm:w-auto px-5 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
+            <i class="fas fa-qrcode mr-2"></i>Scan Product
+        </button>
+        <button id="manual-entry-btn" class="w-full sm:w-auto px-5 py-2 bg-gray-700 text-white font-semibold rounded-lg shadow-md hover:bg-gray-800 transition-colors flex items-center justify-center">
+            <i class="fas fa-keyboard mr-2"></i>Enter Manually
+        </button>
+        <a href="{% url 'inventory:create_product' supermarket.id %}" class="w-full sm:w-auto px-5 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors flex items-center justify-center">
+            <i class="fas fa-plus mr-2"></i>Create New Product
+        </a>
+    </div>
 </div>
 
 <!-- Search and Filter Bar -->
@@ -72,7 +80,8 @@
             <div class="text-center text-xs space-x-3">
                 <a href="{% url 'inventory:product_detail' supermarket.id product.barcode %}" class="text-gray-500 hover:text-blue-600" title="View Details"><i class="fas fa-eye"></i> Details</a>
                 <a href="{% url 'inventory:edit_product' supermarket.id product.barcode %}" class="text-gray-500 hover:text-yellow-600" title="Edit Product"><i class="fas fa-pencil-alt"></i> Edit</a>
-<!--                <a href="{% url 'inventory:delete_product' supermarket.id product.barcode %}" class="text-gray-500 hover:text-red-600" title="Delete Product"><i class="fas fa-trash"></i> Delete</a>-->
+                <!-- ✅ DELETE LINK UNCOMMENTED -->
+                <a href="{% url 'inventory:delete_product' supermarket.id product.barcode %}" class="text-gray-500 hover:text-red-600" title="Delete Product"><i class="fas fa-trash"></i> Delete</a>
             </div>
         </div>
     </div>
@@ -101,7 +110,7 @@
                         </div>
                         <div>
                             <label for="id_expiry_date" class="block text-sm font-medium text-gray-700">Expiry Date</label>
-                            <input type="date" name="expiry_date" id="id_expiry_date" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <input type="date" name="expiry_date" id="id_expiry_date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
                             <label for="id_store_price" class="block text-sm font-medium text-gray-700">Store Price (€)</label>
@@ -121,14 +130,9 @@
                             </select>
                         </div>
                     </div>
-
                     <div class="flex items-center space-x-4 mt-6">
-                        <button id="cancel-btn" type="button" onclick="closeAddModal()" class="w-full px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300">
-                            Cancel
-                        </button>
-                        <button id="ok-btn" type="submit" class="w-full px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700">
-                            Add Item
-                        </button>
+                        <button id="cancel-btn" type="button" onclick="closeAddModal()" class="w-full px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md shadow-sm hover:bg-gray-300">Cancel</button>
+                        <button id="ok-btn" type="submit" class="w-full px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md shadow-sm hover:bg-blue-700">Add Item</button>
                     </div>
                 </form>
             </div>
@@ -136,31 +140,163 @@
     </div>
 </div>
 
+<!-- Scan Product Modal -->
+<div id="scan-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">Scan Product Barcode</h3>
+            <button id="close-scan-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div id="reader" class="w-full rounded-lg overflow-hidden bg-gray-900" style="height: 400px;"></div>
+        <div id="scan-status" class="mt-4 text-center font-semibold text-gray-600"></div>
+    </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div id="manual-entry-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">Enter Barcode Manually</h3>
+            <button id="close-manual-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <form id="manual-lookup-form">
+            <label for="manual-barcode-input" class="block text-sm font-medium text-gray-700">Barcode</label>
+            <input type="text" id="manual-barcode-input" class="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="Type or paste barcode here...">
+            <div id="manual-status" class="mt-2 text-sm text-red-600"></div>
+            <button type="submit" class="mt-4 w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700">Look Up Product</button>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- Modal Logic ---
-    const modal = document.getElementById('add-inventory-modal');
-    const form = document.getElementById('add-inventory-form');
+    // --- State & Config ---
+    const supermarketId = {{ supermarket.id }};
+    const csrfToken = '{{ csrf_token }}';
+    let html5QrCode;
+
+    // --- Modal Logic (Add to Inventory) ---
+    const addModal = document.getElementById('add-inventory-modal');
+    const addForm = document.getElementById('add-inventory-form');
     const modalProductName = document.getElementById('modal-product-name');
     const formActionTemplate = "{% url 'inventory:add_from_product_list' supermarket.id 'BARCODE_PLACEHOLDER' %}";
 
     window.openAddModal = function(productName, productBarcode) {
         modalProductName.textContent = `Add "${productName}" to Inventory`;
-        form.action = formActionTemplate.replace('BARCODE_PLACEHOLDER', productBarcode);
-        modal.classList.remove('hidden');
+        addForm.action = formActionTemplate.replace('BARCODE_PLACEHOLDER', productBarcode);
+        const expiryDateInput = document.getElementById('id_expiry_date');
+        const today = new Date().toISOString().split('T')[0];
+        expiryDateInput.setAttribute('min', today);
+        addModal.classList.remove('hidden');
     }
 
     window.closeAddModal = function() {
-        modal.classList.add('hidden');
-        form.reset();
+        addModal.classList.add('hidden');
+        addForm.reset();
     }
 
-    window.onclick = function(event) {
-        if (event.target == modal) {
-            closeAddModal();
+    // --- Scan Modal Logic ---
+    const scanModal = document.getElementById('scan-modal');
+    const scanBtn = document.getElementById('scan-product-btn');
+    const closeScanBtn = document.getElementById('close-scan-modal-btn');
+    const scanStatus = document.getElementById('scan-status');
+
+    function openScanModal() {
+        scanModal.classList.remove('hidden');
+        startScanner();
+    }
+
+    function closeScanModal() {
+        stopScanner();
+        scanModal.classList.add('hidden');
+        scanStatus.innerHTML = '';
+    }
+
+    scanBtn.addEventListener('click', openScanModal);
+    closeScanBtn.addEventListener('click', closeScanModal);
+
+    // --- Manual Entry Modal Logic ---
+    const manualModal = document.getElementById('manual-entry-modal');
+    const manualBtn = document.getElementById('manual-entry-btn');
+    const closeManualBtn = document.getElementById('close-manual-modal-btn');
+    const manualForm = document.getElementById('manual-lookup-form');
+    const manualStatus = document.getElementById('manual-status');
+
+    function openManualModal() {
+        manualModal.classList.remove('hidden');
+        document.getElementById('manual-barcode-input').focus();
+    }
+
+    function closeManualModal() {
+        manualModal.classList.add('hidden');
+        manualStatus.innerHTML = '';
+        manualForm.reset();
+    }
+
+    manualBtn.addEventListener('click', openManualModal);
+    closeManualBtn.addEventListener('click', closeManualModal);
+    manualForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const barcode = document.getElementById('manual-barcode-input').value;
+        if (barcode) {
+            manualStatus.innerHTML = '<p class="text-blue-600">Looking up barcode...</p>';
+            lookupBarcode(barcode, 'manual');
+        }
+    });
+
+    // --- Scanner Implementation ---
+    function onScanSuccess(decodedText, decodedResult) {
+        scanStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Scan successful! Looking up product...</p>`;
+        stopScanner();
+        lookupBarcode(decodedText, 'scan');
+    }
+
+    async function startScanner() {
+        if (html5QrCode && html5QrCode.isScanning) return;
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        scanStatus.innerText = "Requesting camera access...";
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
+            scanStatus.innerText = "📷 Scanner active. Please scan a barcode.";
+        } catch (err) {
+            scanStatus.innerHTML = `<p class="text-red-500">Camera Error: ${err}. Please grant camera permissions.</p>`;
+        }
+    }
+
+    function stopScanner() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(err => console.error("Failed to stop scanner", err));
+        }
+    }
+
+    async function lookupBarcode(barcode, source) {
+        try {
+            const response = await fetch(`/api/scan/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ barcode, supermarket_id: supermarketId, mode: 'lookup' })
+            });
+            if (!response.ok) throw new Error('Product not found or API error.');
+            const data = await response.json();
+
+            if (source === 'scan') closeScanModal();
+            if (source === 'manual') closeManualModal();
+
+            openAddModal(data.product.name, data.product.barcode);
+
+        } catch (error) {
+            const statusElement = source === 'scan' ? scanStatus : manualStatus;
+            statusElement.innerHTML = `<p class="text-red-500 font-bold">Error: ${error.message}</p>`;
+
+            if (source === 'scan') {
+                setTimeout(() => {
+                    if (!scanModal.classList.contains('hidden')) startScanner();
+                }, 2000);
+            }
         }
     }
 
@@ -169,19 +305,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('search-input');
     const filterForm = document.getElementById('filter-form');
 
-    // Submit form automatically when category is changed
     categoryFilter.addEventListener('change', () => {
         filterForm.submit();
     });
 
-    // Submit form automatically after user stops typing in search box
     let debounceTimeout;
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => {
             filterForm.submit();
-        }, 500); // 500ms delay
+        }, 500);
     });
+
+    // Close modals if user clicks outside of them
+    window.onclick = function(event) {
+        if (event.target == addModal) closeAddModal();
+        if (event.target == scanModal) closeScanModal();
+        if (event.target == manualModal) closeManualModal();
+    }
 });
 </script>
 {% endblock %}

@@ -24,7 +24,7 @@ def landing_page_view(request):
     return render(request, 'inventory/landing_page.html')
 
 
-@login_required
+
 def home_view(request):
     return render(request, 'inventory/home.html')
 
@@ -186,6 +186,7 @@ def product_detail_view(request, supermarket_id, product_barcode):
     }
     return render(request, 'inventory/product_detail.html', context)
 
+
 @require_POST
 @login_required
 def add_inventory_from_product_list(request, supermarket_id, product_barcode):
@@ -196,8 +197,14 @@ def add_inventory_from_product_list(request, supermarket_id, product_barcode):
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
     product = get_object_or_404(Product, barcode=product_barcode)
 
-    category = get_object_or_404(Category, id=request.POST.get('category_id')) if request.POST.get(
-        'category_id') else None
+    # --- FIX: Handle optional category ---
+    category_id = request.POST.get('category_id')
+    category = get_object_or_404(Category, id=category_id) if category_id else None
+
+    # --- FIX: Handle optional store_price ---
+    # Convert empty string to None before saving to the database.
+    price_str = request.POST.get('store_price')
+    store_price = price_str if price_str else None
 
     InventoryItem.objects.create(
         supermarket=supermarket,
@@ -206,11 +213,13 @@ def add_inventory_from_product_list(request, supermarket_id, product_barcode):
         quantity=request.POST.get('quantity', 1),
         expiry_date=request.POST.get('expiry_date'),
         rack_zone=request.POST.get('rack_zone', 'N/A'),
-        store_price=request.POST.get('store_price')
+        store_price=store_price  # Use the cleaned value
     )
 
     messages.success(request, f"Successfully added {product.name} to your inventory.")
     return redirect('inventory:product_list', supermarket_id=supermarket.id)
+
+
 
 
 # --- CRUD FOR PRODUCTS ---
@@ -425,10 +434,91 @@ def scrape_prices_api(request, supermarket_id, product_barcode):
 
 from django.http import JsonResponse, HttpResponse
 
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.db.models import Q, Sum, Avg, Min, Max, Count, OuterRef, Exists
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.urls import reverse
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.core.paginator import Paginator
+
+from .models import Supermarket, Product, InventoryItem, Category
+
+
+# ... other imports
+
+# ... (all other views remain the same) ...
+
+# ADD THIS NEW API VIEW
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def product_filter_api(request, supermarket_id):
+    """
+    Handles asynchronous filtering, sorting, and pagination of the Product Catalog.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
+    # --- Filtering ---
+    search_query = request.GET.get('q', '').strip()
+    category_id = request.GET.get('category', '')
+    stock_status = request.GET.get('stock_status', '')
+
+    product_list = Product.objects.all()
+
+    if search_query:
+        product_list = product_list.filter(
+            Q(name__icontains=search_query) |
+            Q(brand__icontains=search_query) |
+            Q(barcode__icontains=search_query)
+        )
+
+    if category_id:
+        product_list = product_list.filter(category__id=category_id)
+
+    if stock_status == 'in_stock' or stock_status == 'out_of_stock':
+        # Annotate each product with a boolean indicating if it has any inventory items in this supermarket
+        in_stock_query = InventoryItem.objects.filter(product=OuterRef('pk'), supermarket=supermarket)
+        product_list = product_list.annotate(is_in_stock=Exists(in_stock_query))
+
+        if stock_status == 'in_stock':
+            product_list = product_list.filter(is_in_stock=True)
+        else:  # out_of_stock
+            product_list = product_list.filter(is_in_stock=False)
+
+    # --- Sorting ---
+    sort_by = request.GET.get('sort', 'name_asc')
+    if sort_by == 'name_asc':
+        product_list = product_list.order_by('name')
+    elif sort_by == 'name_desc':
+        product_list = product_list.order_by('-name')
+    elif sort_by == 'newest':
+        product_list = product_list.order_by('-id')  # Assuming higher ID is newer
+
+    # --- Pagination ---
+    page_number = request.GET.get('page', 1)
+    paginator = Paginator(product_list, 20)  # Show 20 products per page
+    page_obj = paginator.get_page(page_number)
+
+    # Render the product cards using a partial template
+    products_html = render_to_string(
+        'inventory/partials/_product_grid.html',
+        {'products': page_obj.object_list, 'supermarket': supermarket}
+    )
+
+    return JsonResponse({
+        'products_html': products_html,
+        'has_next_page': page_obj.has_next()
+    })
+
+
+# ... (the rest of your views.py) ...
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-# Replace your existing product_search_api view with this one.
 def product_search_api(request):
     """
     API endpoint for the live product search.
@@ -475,6 +565,67 @@ def product_search_api(request):
     }
 
     return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def product_filter_api(request, supermarket_id):
+    """
+    Handles asynchronous filtering, sorting, and pagination of the Product Catalog.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
+    # --- Filtering ---
+    search_query = request.GET.get('q', '').strip()
+    category_id = request.GET.get('category', '')
+    stock_status = request.GET.get('stock_status', '')
+
+    product_list = Product.objects.all()
+
+    if search_query:
+        product_list = product_list.filter(
+            Q(name__icontains=search_query) |
+            Q(brand__icontains=search_query) |
+            Q(barcode__icontains=search_query)
+        )
+
+    if category_id:
+        product_list = product_list.filter(category__id=category_id)
+
+    if stock_status == 'in_stock' or stock_status == 'out_of_stock':
+        # Annotate each product with a boolean indicating if it has any inventory items in this supermarket
+        in_stock_query = InventoryItem.objects.filter(product=OuterRef('pk'), supermarket=supermarket)
+        product_list = product_list.annotate(is_in_stock=Exists(in_stock_query))
+
+        if stock_status == 'in_stock':
+            product_list = product_list.filter(is_in_stock=True)
+        else:  # out_of_stock
+            product_list = product_list.filter(is_in_stock=False)
+
+    # --- Sorting ---
+    sort_by = request.GET.get('sort', 'name_asc')
+    if sort_by == 'name_asc':
+        product_list = product_list.order_by('name')
+    elif sort_by == 'name_desc':
+        product_list = product_list.order_by('-name')
+    elif sort_by == 'newest':
+        product_list = product_list.order_by('-id')  # Assuming higher ID is newer
+
+    # --- Pagination ---
+    page_number = request.GET.get('page', 1)
+    paginator = Paginator(product_list, 20)  # Show 20 products per page
+    page_obj = paginator.get_page(page_number)
+
+    # Render the product cards using a partial template
+    products_html = render_to_string(
+        'inventory/partials/_product_grid.html',
+        {'products': page_obj.object_list, 'supermarket': supermarket}
+    )
+
+    return JsonResponse({
+        'products_html': products_html,
+        'has_next_page': page_obj.has_next()
+    })
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
