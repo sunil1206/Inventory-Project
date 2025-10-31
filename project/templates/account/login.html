@@ -1,123 +1,182 @@
 {% extends "inventory/base.html" %}
 {% load socialaccount %}
+{% load i18n %}
 
 {% block title %}Sign In{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- The <title> can be set here or in the block above -->
-    <title>Sign In to Your Account</title>
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts for a clean, modern look -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* Custom styles for the page */
-        /* Note: If your base.html includes these styles, you can remove them from here. */
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+<style>
+    /* 1. The Page Wrapper & Background */
+    .teal-theme-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 90vh;
+        padding: 2rem 1rem;
+
+        /* A subtle, clean background */
+        background-color: #f7f7f7;
+    }
+
+    /* 2. The Focused Panel (Rectangle) */
+    .teal-panel {
+        width: 100%;
+        max-width: 480px;
+        background: #ffffff;
+
+        border-radius: 0.75rem;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.07);
+
+        overflow: hidden;
+    }
+
+    /* 3. Panel Header - Teal Color */
+    .panel-header {
+        background-color: #20c997; /* Bootstrap Teal */
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    .panel-header svg {
+        width: 48px;
+        height: 48px;
+    }
+
+    /* 4. Panel Body */
+    .panel-body {
+        padding: 2.5rem;
+    }
+    @media (max-width: 576px) {
+        .panel-body {
+            padding: 1.5rem;
         }
-        /* A subtle background pattern */
-        .background-pattern {
-            background-color: #f0f2f5;
-            background-image:
-                radial-gradient(circle at 1px 1px, #d1d5db 1px, transparent 0);
-            background-size: 20px 20px;
-        }
-    </style>
-</head>
-<body class="background-pattern">
-    <!-- This container helps center the content within the body -->
-    <div class="flex items-center justify-center min-h-screen py-12 px-4 sm:px-6 lg:px-8">
-        <main class="w-full max-w-md mx-auto">
-            <div class="bg-white rounded-xl shadow-2xl overflow-hidden">
-                <div class="px-8 py-10 md:px-12 md:py-12">
+    }
 
-                    <!-- Header Section -->
-                    <div class="text-center">
-                        <svg class="mx-auto h-12 w-auto text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                        </svg>
-                        <h1 class="text-3xl font-bold text-gray-900 mt-4">Welcome Back</h1>
-                        <p class="text-gray-600 mt-2">Sign in to manage your inventory.</p>
-                    </div>
+    /* 5. Google Button */
+    .btn-google {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        color: #444;
+        transition: all 0.2s ease-in-out;
+    }
+    .btn-google:hover {
+        background-color: #f8f9fa;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
 
-                    <!-- Google Sign-In Button -->
-                    <div class="mt-8">
-                        <a href="{% provider_login_url 'google' %}"
-                           class="w-full flex items-center justify-center bg-white border border-gray-300 rounded-lg shadow-sm px-6 py-3 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
-                            <img class="h-6 w-6 mr-3" src="https://www.svgrepo.com/show/475656/google-color.svg" loading="lazy" alt="google logo">
-                            <span>Sign in with Google</span>
-                        </a>
-                    </div>
+    /* 6. Custom Teal Button */
+    .btn-teal {
+        background-color: #20c997;
+        color: white;
+        border: none;
+    }
+    .btn-teal:hover {
+        background-color: #1baa80; /* A slightly darker teal for hover */
+        color: white;
+    }
+</style>
 
-                    <!-- "OR" Separator -->
-                    <div class="my-6 flex items-center text-center">
-                        <div class="flex-grow border-t border-gray-200"></div>
-                        <span class="flex-shrink mx-4 text-xs font-semibold uppercase text-gray-400">Or continue with</span>
-                        <div class="flex-grow border-t border-gray-200"></div>
-                    </div>
+<div class="teal-theme-wrapper">
 
-                    <!-- Traditional Login Form (powered by allauth) -->
-                    <form class="login" method="POST" action="{% url 'account_login' %}">
-                        {% csrf_token %}
+    <div class="teal-panel">
 
-                        <!-- Display non-field errors (e.g., "incorrect password") -->
-                        {% if form.non_field_errors %}
-                            <div class="bg-red-50 border border-red-300 text-red-700 px-4 py-3 rounded-lg relative mb-4 text-sm" role="alert">
-                                {{ form.non_field_errors|striptags }}
-                            </div>
-                        {% endif %}
+        <!-- 1. Header Section inside the Panel -->
+        <div class="panel-header">
+            <!-- Icon color is now inherited (white) -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-qr-code-scan mb-2" viewBox="0 0 16 16">
+                <path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 0 .5M12 .5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5M4 1v1H1V1zM1 4h1v1H1zM4 4h1v1H4zM4 7h1v1H4zM1 7h1v1H1zM1 10h1v1H1zM4 10h1v1H4zM7 1h1v1H7zM7 4h1v1H7zM7 7h1v1H7zM7 10h1v1H7zM10 1h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1zm3-9h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1z"/>
+            </svg>
+            <h2 class="h3 fw-bold mb-0">Welcome Back!</h2>
+            <p class="opacity-75 mb-0">Sign in to continue to GoScan</p>
+        </div>
 
-                        <div class="space-y-4">
-                            <div>
-                                <label for="id_login" class="block text-sm font-medium text-gray-700 sr-only">Email Address</label>
-                                <input type="email" name="login" id="id_login" placeholder="Email Address" autocomplete="email" required
-                                       class="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                            </div>
-                            <div>
-                                <label for="id_password" class="block text-sm font-medium text-gray-700 sr-only">Password</label>
-                                <input type="password" name="password" id="id_password" placeholder="Password" autocomplete="current-password" required
-                                       class="appearance-none block w-full px-3 py-3 border border-gray-300 rounded-lg placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                            </div>
-                        </div>
+        <!-- 2. Form Section -->
+        <div class="panel-body">
 
-                        <div class="flex items-center justify-between mt-4">
-                            <div class="text-sm">
-                                <a href="{% url 'account_reset_password' %}" class="font-medium text-blue-600 hover:text-blue-500">
-                                    Forgot password?
-                                </a>
-                            </div>
-                        </div>
-
-                        <div class="mt-6">
-                            <button type="submit" class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                Sign In
-                            </button>
-                        </div>
-
-                        <div class="text-center text-sm mt-6">
-                            <p class="text-gray-600">
-                                Don't have an account?
-                                <a href="{% url 'account_signup' %}" class="font-medium text-blue-600 hover:text-blue-500">
-                                    Sign Up
-                                </a>
-                            </p>
-                        </div>
-                    </form>
-                </div>
+            <!-- Social Login -->
+            {% get_providers as socialaccount_providers %}
+            {% if socialaccount_providers %}
+            <div class="d-grid gap-2 mb-3">
+                {% for provider in socialaccount_providers %}
+                    {% if provider.id == 'google' %}
+                    <a href="{% provider_login_url 'google' %}" class="btn btn-google btn-lg" role="button">
+                        <img width="20" height="20" class="me-2" alt="Google logo"
+                             src="https://www.svgrepo.com/show/475656/google-color.svg" />
+                        Sign in with Google
+                    </a>
+                    {% endif %}
+                {% endfor %}
             </div>
-        </main>
-    </div>
-</body>
-</html>
-{% endblock %}
 
+            <!-- "OR" Separator -->
+            <div class="d-flex align-items-center my-4">
+                <hr class="flex-grow-1">
+                <span class="mx-3 text-muted small text-uppercase">Or</span>
+                <hr class="flex-grow-1">
+            </div>
+            {% endif %}
+
+            <!-- Standard Login Form -->
+            <form method="POST" action="{% url 'account_login' %}" novalidate>
+                {% csrf_token %}
+
+                <!-- Non-Field Errors -->
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger p-2 text-center small" role="alert">
+                        {% for error in form.non_field_errors %} {{ error }} {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Floating label for Username/Email -->
+                <div class="form-floating mb-3">
+                    <input type="{{ form.login.field.widget.input_type }}" name="login" id="id_login"
+                           class="form-control {% if form.login.errors %}is-invalid{% endif %}"
+                           placeholder="Username or Email" required>
+                    <label for="id_login">Username or Email</label>
+                    {% for error in form.login.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <!-- Floating label for Password -->
+                <div class="form-floating mb-3">
+                    <input type="password" name="password" id="id_password"
+                           class="form-control {% if form.password.errors %}is-invalid{% endif %}"
+                           placeholder="Password" required>
+                    <label for="id_password">Password</label>
+                    {% for error in form.password.errors %}
+                        <div class="invalid-feedback">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                {% if redirect_field_value %}
+                <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
+                {% endif %}
+
+                <!-- Remember Me & Forgot Password -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <input type="checkbox" name="remember" class="form-check-input" id="id_remember">
+                        <label class="form-check-label small" for="id_remember">Remember me</label>
+                    </div>
+                    <a class="small text-decoration-none" href="{% url 'account_reset_password' %}">Forgot Password?</a>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="d-grid">
+                    <button class="btn btn-teal btn-lg fw-medium" type="submit">Sign In</button>
+                </div>
+
+                <!-- Sign Up Link -->
+                <div class="text-center mt-4">
+                    <p class="text-muted mb-0 small">Don't have an account?
+                        <a href="{% url 'users:register' %}" class="text-decoration-none fw-medium">Sign Up</a>
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

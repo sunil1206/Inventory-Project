@@ -1,0 +1,193 @@
+{% extends "inventory/base.html" %}
+{% load socialaccount %}
+{% load i18n %}
+
+{% block title %}Create Account{% endblock %}
+
+{% block content %}
+<style>
+    /* 1. The Page Wrapper & Background */
+    .teal-theme-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 90vh;
+        padding: 2rem 1rem;
+
+        /* A subtle, clean background */
+        background-color: #f7f7f7;
+    }
+
+    /* 2. The Focused Panel (Rectangle) */
+    .teal-panel {
+        width: 100%;
+        max-width: 520px; /* A bit wider for the signup form */
+        background: #ffffff;
+
+        border-radius: 0.75rem;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 10px 35px rgba(0, 0, 0, 0.07);
+
+        overflow: hidden;
+    }
+
+    /* 3. Panel Header - Teal Color */
+    .panel-header {
+        background-color: #20c997; /* Bootstrap Teal */
+        color: white;
+        padding: 2rem;
+        text-align: center;
+    }
+    .panel-header svg {
+        width: 48px;
+        height: 48px;
+    }
+
+    /* 4. Panel Body */
+    .panel-body {
+        padding: 2.5rem;
+    }
+    @media (max-width: 576px) {
+        .panel-body {
+            padding: 1.5rem;
+        }
+    }
+
+    /* 5. Google Button */
+    .btn-google {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        color: #444;
+        transition: all 0.2s ease-in-out;
+    }
+    .btn-google:hover {
+        background-color: #f8f9fa;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    /* 6. Custom Teal Button */
+    .btn-teal {
+        background-color: #20c997;
+        color: white;
+        border: none;
+    }
+    .btn-teal:hover {
+        background-color: #1baa80; /* A slightly darker teal for hover */
+        color: white;
+    }
+</style>
+
+<div class="teal-theme-wrapper">
+
+    <div class="teal-panel">
+
+        <!-- 1. Header Section -->
+        <div class="panel-header">
+            <!-- Icon color is now inherited (white) -->
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" class="bi bi-qr-code-scan mb-2" viewBox="0 0 16 16">
+                 <path d="M0 .5A.5.5 0 0 1 .5 0h3a.5.5 0 0 1 0 1h-3A.5.5 0 0 1 0 .5M12 .5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5M.5 12a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 1 .5-.5M4 1v1H1V1zM1 4h1v1H1zM4 4h1v1H4zM4 7h1v1H4zM1 7h1v1H1zM1 10h1v1H1zM4 10h1v1H4zM7 1h1v1H7zM7 4h1v1H7zM7 7h1v1H7zM7 10h1v1H7zM10 1h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1zm3-9h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1zm0 3h1v1h-1z"/>
+            </svg>
+            <h2 class="h3 fw-bold mb-0">Create Your Account</h2>
+            <p class="opacity-75 mb-0">Get started with GoScan today.</p>
+        </div>
+
+        <!-- 2. Form Section -->
+        <div class="panel-body">
+
+            <!-- Social Login -->
+            {% get_providers as socialaccount_providers %}
+            {% if socialaccount_providers %}
+            <div class="d-grid gap-2 mb-3">
+                {% for provider in socialaccount_providers %}
+                    {% if provider.id == 'google' %}
+                    <a href="{% provider_login_url 'google' %}" class="btn btn-google btn-lg" role="button">
+                        <img width="20" height="20" class="me-2" alt="Google logo"
+                             src="https://www.svgrepo.com/show/475656/google-color.svg" />
+                        Sign up with Google
+                    </a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- "OR" Separator -->
+            <div class="d-flex align-items-center my-4">
+                <hr class="flex-grow-1">
+                <span class="mx-3 text-muted small text-uppercase">Or</span>
+                <hr class="flex-grow-1">
+            </div>
+            {% endif %}
+
+            <!-- Standard Signup Form -->
+            <form method="POST" action="{% url 'users:register' %}" novalidate>
+                {% csrf_token %}
+
+                <!-- Non-Field Errors -->
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger p-2 text-center small" role="alert">
+                        {% for error in form.non_field_errors %} {{ error }} {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- First/Last Name (Side-by-side) -->
+                <div class="row g-2 mb-3">
+                    <div class="col-md">
+                        <div class="form-floating">
+                            <input type="text" name="first_name" id="id_first_name" class="form-control {% if form.first_name.errors %}is-invalid{% endif %}" placeholder="First Name" required value="{{ form.first_name.value|default:'' }}">
+                            <label for="id_first_name">First Name</label>
+                            {% for error in form.first_name.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md">
+                        <div class="form-floating">
+                            <input type="text" name="last_name" id="id_last_name" class="form-control {% if form.last_name.errors %}is-invalid{% endif %}" placeholder="Last Name" required value="{{ form.last_name.value|default:'' }}">
+                            <label for="id_last_name">Last Name</label>
+                            {% for error in form.last_name.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Username -->
+                <div class="form-floating mb-3">
+                    <input type="text" name="username" id="id_username" class="form-control {% if form.username.errors %}is-invalid{% endif %}" placeholder="Username" required value="{{ form.username.value|default:'' }}">
+                    <label for="id_username">Username</label>
+                    {% for error in form.username.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                </div>
+
+                <!-- Email -->
+                <div class="form-floating mb-3">
+                    <input type="email" name="email" id="id_email" class="form-control {% if form.email.errors %}is-invalid{% endif %}" placeholder="Email Address" required value="{{ form.email.value|default:'' }}">
+                    <label for="id_email">Email Address</label>
+                    {% for error in form.email.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                </div>
+
+                <!-- Password -->
+                <div class="form-floating mb-3">
+                    <input type="password" name="password" id="id_password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" placeholder="Create Password" required>
+                    <label for="id_password">Create Password</label>
+                    {% for error in form.password.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                </div>
+
+                <!-- Confirm Password -->
+                <div class="form-floating mb-3">
+                    <input type="password" name="confirm_password" id="id_confirm_password" class="form-control {% if form.confirm_password.errors %}is-invalid{% endif %}" placeholder="Confirm Password" required>
+                    <label for="id_confirm_password">Confirm Password</label>
+                    {% for error in form.confirm_password.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                </div>
+
+                <!-- Submit Button -->
+                <div class="d-grid mt-4">
+                    <button class="btn btn-teal btn-lg fw-medium" type="submit">Create Account</button>
+                </div>
+
+                <!-- Login Link -->
+                <div class="text-center mt-4">
+                    <p class="text-muted mb-0 small">Already have an account?
+                        <a href="{% url 'account_login' %}" class="text-decoration-none fw-medium">Sign In</a>
+                    </p>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

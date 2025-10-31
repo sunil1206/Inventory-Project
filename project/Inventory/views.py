@@ -1,3 +1,6 @@
+import csv
+import random
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
@@ -10,8 +13,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Supermarket, Product, InventoryItem, Category, CompetitorPrice, StaffProfile, Supplier, PricingRule, \
-    Promotion
+from pricing.models import CompetitorPrice, WastageRecord, DiscountedSale
+from product_price import models
 from .tasks import scrape_product_task  # Correctly import the Celery task
 from .scraping_utils import get_product_info_cascade  # Correctly import the cascade function
 
@@ -35,27 +38,34 @@ def supermarket_dashboard_view(request, supermarket_id):
     return render(request, 'inventory/dashboard.html', {'supermarket': supermarket})
 
 
+# --- ✅ ADD THESE NEW API VIEWS AT THE END OF THE FILE ---
+
 @login_required
 def scan_item_page_view(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
     categories = Category.objects.all()
-    return render(request, 'inventory/scan.html', {'supermarket': supermarket, 'categories': categories})
+    racks = Rack.objects.filter(supermarket=supermarket).order_by('name')
+    return render(request, 'inventory/scan.html', {'supermarket': supermarket, 'categories': categories, 'racks': racks})
 
 
-@login_required
+
+@login_required(login_url='account_login')
 def inventory_list_view(request, supermarket_id):
+    """
+    Displays a filterable list of all inventory items, GROUPED BY PRODUCT.
+    """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
 
-    if request.method == 'POST':
-        category_name = request.POST.get('name')
-        if category_name:
-            Category.objects.get_or_create(name__iexact=category_name, defaults={'name': category_name})
-        return redirect('inventory:inventory_list', supermarket_id=supermarket.id)
+    # ✅ FIX: Efficiently pre-fetch all related models, including the new 'rack'
+    inventory_items = supermarket.inventory_items.all().select_related(
+        'product', 'category', 'product__category', 'rack'
+    )
 
-    inventory_items = supermarket.inventory_items.all().select_related('product', 'category')
+    # Get filter parameters from the URL
     search_query = request.GET.get('q', '')
     category_filter = request.GET.get('category', '')
     status_filter = request.GET.get('status', '')
+    rack_filter = request.GET.get('rack', '')  # ✅ ADDED: Get new rack filter
 
     if search_query:
         inventory_items = inventory_items.filter(
@@ -63,52 +73,82 @@ def inventory_list_view(request, supermarket_id):
             Q(product__brand__icontains=search_query) |
             Q(product__barcode__icontains=search_query)
         )
-
     if category_filter:
-        inventory_items = inventory_items.filter(category__id=category_filter)
+        inventory_items = inventory_items.filter(
+            Q(category__id=category_filter) | Q(product__category__id=category_filter)
+        ).distinct()
 
     if status_filter:
         today = timezone.now().date()
         if status_filter == 'fresh':
             inventory_items = inventory_items.filter(expiry_date__gt=today + timezone.timedelta(days=7))
-        elif status_filter == 'soon':
-            inventory_items = inventory_items.filter(expiry_date__gte=today,
-                                                     expiry_date__lte=today + timezone.timedelta(days=7))
+        elif status_filter == 'expires_soon':
+            inventory_items = inventory_items.filter(
+                expiry_date__range=[today + timezone.timedelta(days=1), today + timezone.timedelta(days=7)])
+        elif status_filter == 'expires_today':
+            inventory_items = inventory_items.filter(expiry_date=today)
         elif status_filter == 'expired':
             inventory_items = inventory_items.filter(expiry_date__lt=today)
 
+    # ✅ ADDED: New filter logic for rack
+    if rack_filter:
+        inventory_items = inventory_items.filter(rack__id=rack_filter)
+
     categories = Category.objects.all()
+    # ✅ ADDED: Get all racks for this supermarket to populate the dropdown
+    racks = Rack.objects.filter(supermarket=supermarket).order_by('name')
+
     context = {
         'supermarket': supermarket,
-        'inventory_items': inventory_items,
+        'inventory_items': inventory_items.order_by('expiry_date'),  # Order the final list
         'categories': categories,
+        'racks': racks,  # ✅ Pass racks to the template
         'search_query': search_query,
         'category_filter': category_filter,
-        'status_filter': status_filter
+        'status_filter': status_filter,
+        'rack_filter': rack_filter,  # ✅ Pass rack_filter to the template
     }
     return render(request, 'inventory/inventory_list.html', context)
 
 
-@login_required
+
+@login_required(login_url='account_login')
 def edit_inventory_item(request, supermarket_id, item_id):
+    """
+    Handles the editing of a single batch of an inventory item.
+    ✅ Updated to use the 'rack' ForeignKey.
+    """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
     item = get_object_or_404(InventoryItem, pk=item_id, supermarket=supermarket)
 
     if request.method == 'POST':
         item.quantity = request.POST.get('quantity', item.quantity)
         item.expiry_date = request.POST.get('expiry_date', item.expiry_date)
-        item.store_price = request.POST.get('store_price', item.store_price)
-        item.rack_zone = request.POST.get('rack_zone', item.rack_zone)
+        item.store_price = request.POST.get('store_price') or None
+
+        # ✅ FIX: Save the rack_id from the dropdown
+        item.rack_id = request.POST.get('rack') or None
+
+        # (Optional: you can clear the old field if you are migrating)
+        # item.rack_zone = None
+
         category_id = request.POST.get('category')
-        if category_id:
-            item.category = get_object_or_404(Category, pk=category_id)
-        else:
-            item.category = None
+        item.category_id = category_id if category_id else None
+
         item.save()
+        messages.success(request, f"Updated {item.product.name}.")
         return redirect('inventory:inventory_list', supermarket_id=supermarket.id)
 
     categories = Category.objects.all()
-    context = {'supermarket': supermarket, 'item': item, 'categories': categories}
+    # ✅ FIX: Fetch all racks *for this supermarket* to show in the dropdown
+    racks = Rack.objects.filter(supermarket=supermarket)
+
+    context = {
+        'supermarket': supermarket,
+        'item': item,
+        'categories': categories,
+        'racks': racks,  # ✅ Pass the racks to the template
+    }
     return render(request, 'inventory/edit_inventory_item.html', context)
 
 
@@ -121,7 +161,7 @@ def export_inventory_csv(request, supermarket_id):
 
     writer = csv.writer(response)
     writer.writerow(
-        ['Barcode', 'Product Name', 'Brand', 'Category', 'Quantity', 'Store Price', 'Expiry Date', 'Rack Zone',
+        ['Barcode', 'Product Name', 'Brand', 'Category', 'Quantity', 'Store Price', 'Expiry Date', 'Rack',
          'Status'])
 
     inventory_items = supermarket.inventory_items.all().select_related('product', 'category')
@@ -134,42 +174,55 @@ def export_inventory_csv(request, supermarket_id):
             item.quantity,
             item.store_price,
             item.expiry_date,
-            item.rack_zone,
+            item.manufacture_date,
+            item.rack,
             item.status
         ])
 
     return response
 
 
-# --- NEW ---
+
+
 @login_required
 def product_list_view(request, supermarket_id):
     """
-    Displays a master list of all unique products (the "Product Catalog").
-    Allows for adding products from this list directly to the inventory.
+    Displays a master list of all unique products (the "Product Catalog")
+    with pagination and filtering.
     """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
 
-    products = Product.objects.all().order_by('name')
+    # --- ✅ QUERY FOR RACKS ---
+    racks = Rack.objects.filter(supermarket=supermarket).order_by('name')
+
+    products_list = Product.objects.all().order_by('name')
     search_query = request.GET.get('q', '')
+    category_filter = request.GET.get('category', '')
 
     if search_query:
-        products = products.filter(
+        products_list = products_list.filter(
             Q(name__icontains=search_query) |
             Q(brand__icontains=search_query) |
             Q(barcode__icontains=search_query)
         )
+    if category_filter:
+        products_list = products_list.filter(category__id=category_filter)
 
     categories = Category.objects.all()
 
+    paginator = Paginator(products_list, 100)
+    page_number = request.GET.get('page')
+    products_page = paginator.get_page(page_number)
+
     context = {
         'supermarket': supermarket,
-        'products': products,
-        'categories': categories,  # For the 'add' modal
+        'products': products_page,
+        'categories': categories,
+        'racks': racks,  # ✅ PASS 'racks' (PLURAL)
         'search_query': search_query,
+        'category_filter': category_filter,
     }
     return render(request, 'inventory/product_list.html', context)
-
 
 @login_required
 def product_detail_view(request, supermarket_id, product_barcode):
@@ -187,39 +240,283 @@ def product_detail_view(request, supermarket_id, product_barcode):
     return render(request, 'inventory/product_detail.html', context)
 
 
+# from models import Supplier  # Make sure Supplier is imported
+
+
+# ... (all other view functions like product_list_view, scan_api, etc.)
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError
+from .models import Supermarket, StaffProfile, Supplier, Rack, ProductPrice
+from .forms import RackForm  # ✅ Import the new form
+
+User = get_user_model()
+
+
+# Import your models and forms
+
+from .forms import RackForm
+
+@login_required(login_url='account_login')
+def rack_list_create_view(request, supermarket_id):
+    """
+    Handles listing all racks for a supermarket AND creating new ones.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
+    if request.method == 'POST':
+        rack_form = RackForm(request.POST)
+        if rack_form.is_valid():
+            try:
+                rack = rack_form.save(commit=False)
+                rack.supermarket = supermarket
+                rack.save()
+                messages.success(request, f"Rack '{rack.name}' created successfully.")
+            except IntegrityError:
+                messages.error(request, f"A rack with the name '{rack_form.cleaned_data['name']}' already exists.")
+            return redirect('inventory:rack_list', supermarket_id=supermarket.id)
+    else:
+        rack_form = RackForm()
+
+    racks = Rack.objects.filter(supermarket=supermarket).order_by('name')
+    context = {
+        'supermarket': supermarket,
+        'racks': racks,
+        'rack_form': rack_form  # Use the specific variable name
+    }
+    return render(request, 'inventory/management/rack_management.html', context)
+
+
+@login_required(login_url='account_login')
+def rack_edit_view(request, supermarket_id, rack_id):
+    """
+    Handles editing an existing rack.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    rack = get_object_or_404(Rack, pk=rack_id, supermarket=supermarket)
+
+    if request.method == 'POST':
+        rack_form = RackForm(request.POST, instance=rack)
+        if rack_form.is_valid():
+            try:
+                rack_form.save()
+                messages.success(request, f"Rack '{rack.name}' updated successfully.")
+                return redirect('inventory:rack_list', supermarket_id=supermarket.id)
+            except IntegrityError:
+                messages.error(request, f"A rack with this name already exists.")
+    else:
+        rack_form = RackForm(instance=rack)
+
+    context = {
+        'supermarket': supermarket,
+        'rack': rack,
+        'rack_form': rack_form  # Use the specific variable name
+    }
+    return render(request, 'inventory/management/rack_edit.html', context)
+
+
+@login_required(login_url='account_login')
+@require_POST  # Ensures this view can only be called with a POST request
+def rack_delete_view(request, supermarket_id, rack_id):
+    """
+    Handles deleting a specific rack.
+    """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    rack = get_object_or_404(Rack, pk=rack_id, supermarket=supermarket)
+
+    rack_name = rack.name
+    rack.delete()
+    messages.success(request, f"Rack '{rack_name}' has been deleted.")
+
+    return redirect('inventory:rack_list', supermarket_id=supermarket.id)
+
+
+# In your inventory/views.py
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.contrib import messages
+from django.db import IntegrityError
+from django.db.models import F
+from .models import Supermarket, Product, Category, Rack, InventoryItem, ProductPrice
+
+
 @require_POST
-@login_required
+@login_required(login_url='account_login')
 def add_inventory_from_product_list(request, supermarket_id, product_barcode):
     """
-    Handles the form submission from the 'Add to Inventory' modal
-    on the product list page.
+    Handles the form submission from the 'Add to Inventory' modal,
+    now with auto-fetching for price, category, and rack.
     """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
     product = get_object_or_404(Product, barcode=product_barcode)
 
-    # --- FIX: Handle optional category ---
-    category_id = request.POST.get('category_id')
-    category = get_object_or_404(Category, id=category_id) if category_id else None
+    # --- 1. Get all data from the form ---
+    # We get the user's explicit choices from the form first
+    form_category_id = request.POST.get('category_id')
+    form_rack_id = request.POST.get('rack_id')  # Assumes form field is 'rack_id'
+    form_price_str = request.POST.get('store_price')
 
-    # --- FIX: Handle optional store_price ---
-    # Convert empty string to None before saving to the database.
-    price_str = request.POST.get('store_price')
-    store_price = price_str if price_str else None
+    form_expiry_date = request.POST.get('expiry_date')
+    form_manufacture_date = request.POST.get('manufacture_date') or None
+    form_quantity = int(request.POST.get('quantity', 1))
 
-    InventoryItem.objects.create(
-        supermarket=supermarket,
-        product=product,
-        category=category,
-        quantity=request.POST.get('quantity', 1),
-        expiry_date=request.POST.get('expiry_date'),
-        rack_zone=request.POST.get('rack_zone', 'N/A'),
-        store_price=store_price  # Use the cleaned value
-    )
+    # --- 2. Initialize final values ---
+    # The value will be the form value, or None if the user left it blank
+    final_category_id = form_category_id if form_category_id else None
+    final_rack_id = form_rack_id if form_rack_id else None
+    final_store_price = form_price_str if form_price_str and form_price_str.strip() else None
 
-    messages.success(request, f"Successfully added {product.name} to your inventory.")
+    # --- 3. ✅ NEW: AUTO-FETCH LOGIC for Price, Category, and Rack ---
+    try:
+        # Get the single default-settings object for this product
+        defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+
+        # Apply defaults ONLY if the form value was not provided
+        if final_store_price is None:
+            final_store_price = defaults_entry.price
+
+        # New logic for category
+        if final_category_id is None and defaults_entry.default_category_id:
+            final_category_id = defaults_entry.default_category_id
+
+        # New logic for rack
+        if final_rack_id is None and defaults_entry.default_rack_id:
+            final_rack_id = defaults_entry.default_rack_id
+
+    except ProductPrice.DoesNotExist:
+        # No defaults entry exists, just continue.
+        # The 'final_' variables will remain as they were.
+        pass
+
+    # --- 4. ✅ NEW: Fallback for Category ---
+    # If category is *still* not set (no form value, no default),
+    # use the product's main category as a last resort.
+    if final_category_id is None and product.category_id:
+        final_category_id = product.category_id
+
+    # --- 5. Handle optional file upload ---
+    uploaded_image = request.FILES.get('cover_image')
+    if uploaded_image:
+        if product.cover_image:
+            product.cover_image.delete()
+        product.cover_image = uploaded_image
+        product.save()
+
+    # --- 6. ✅ FIX: Improved Create or Update Logic ---
+    # This logic is much safer. It finds a batch based on *all* its
+    # properties, and only sets quantity in the 'defaults'.
+    try:
+        item, created = InventoryItem.objects.get_or_create(
+            supermarket=supermarket,
+            product=product,
+            expiry_date=form_expiry_date,
+            store_price=final_store_price,
+            rack_id=final_rack_id,
+            category_id=final_category_id,
+            manufacture_date=form_manufacture_date,
+            defaults={'quantity': form_quantity}  # Only set quantity if new
+        )
+
+        if not created:
+            # If the batch already exists, just add the quantity
+            item.quantity = F('quantity') + form_quantity
+            item.save()
+            messages.success(request, f"Added {form_quantity} more to an existing batch of {product.name}.")
+        else:
+            # A new batch was created
+            messages.success(request, f"Successfully added a new batch of {product.name} to inventory.")
+
+    # --- 7. ✅ FIX: Cleaned up Exception Handling ---
+    except IntegrityError:
+        messages.error(request, "Database error. This exact item (product, expiry, price, rack) may already exist.")
+    except Exception as e:
+        messages.error(request, f"An unexpected error occurred: {e}")
+
     return redirect('inventory:product_list', supermarket_id=supermarket.id)
+# @require_POST  # Ensures this view only accepts POST requests
+# @login_required(login_url='account_login')
+# def add_inventory_from_product_list(request, supermarket_id, product_barcode):
+#     """
+#     Handles the form submission from the 'Add to Inventory' modal
+#     on the product list page.
+#     """
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#     product = get_object_or_404(Product, barcode=product_barcode)
+#
+#     # --- Handle optional file upload ---
+#     uploaded_image = request.FILES.get('cover_image')
+#     if uploaded_image:
+#         if product.cover_image:
+#             product.cover_image.delete()  # Remove old file
+#         product.cover_image = uploaded_image
+#         product.save()
+#
+#     # --- Handle optional fields ---
+#     category_id = request.POST.get('category_id')
+#     category = get_object_or_404(Category, id=category_id) if category_id else None
+#     rack_id = request.POST.get('rack_id') or None
+#     manufacture_date = request.POST.get('manufacture_date') or None
+#
+#
+#     price_str = request.POST.get('store_price')
+#     store_price = price_str if price_str and price_str.strip() else None
+#
+#     rack_id = request.POST.get('rack') or None
+#
+#     # --- ✅ FIX: Get the manufacture_date from the form ---
+#     manufacture_date = request.POST.get('manufacture_date') or None
+#     quantity_to_add = int(request.POST.get('quantity', 1))
+#     # --- END FIX ---
+#
+#     # --- ✅ AUTO-FETCH PRICE LOGIC ---
+#     if store_price is None:
+#         try:
+#             product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+#             store_price = product_price_entry.price
+#         except ProductPrice.DoesNotExist:
+#             store_price = None
+#
+#     try:
+#         item, created = InventoryItem.objects.get_or_create(
+#             supermarket=supermarket,
+#             product=product,
+#             category=category,
+#             quantity=request.POST.get('quantity', 1),
+#             expiry_date=request.POST.get('expiry_date'),
+#             manufacture_date=manufacture_date,  # ✅ FIX: Add the field here
+#             rack_id=rack_id,
+#             store_price=store_price,
+#             defaults={
+#                 'quantity': quantity_to_add,
+#                 'category_id': category_id,
+#             }
+#         )
+#
+#         if not created:
+#             # If the batch already exists, just add the quantity
+#             item.quantity = F('quantity') + quantity_to_add
+#             item.save()
+#             messages.success(request, f"Added {quantity_to_add} more to an existing batch of {product.name}.")
+#         else:
+#             # A new batch was created
+#             messages.success(request, f"Successfully added a new batch of {product.name} to inventory.")
+#     except IntegrityError:
+#         messages.error(request, "This exact item (product, expiry, price, rack) already exists.")
+#     except Exception as e:
+#         messages.error(request, f"An error occurred: {e}")
+#
+#         messages.success(request, f"Successfully added {product.name} to your inventory.")
+#     except Exception as e:
+#         messages.error(request, f"An error occurred: {e}")
+#
+#     return redirect('inventory:product_list', supermarket_id=supermarket.id)
 
-
+# ... (rest of your views.py file) ...
 
 
 # --- CRUD FOR PRODUCTS ---
@@ -250,6 +547,9 @@ def create_product_view(request, supermarket_id):
     return render(request, 'inventory/product_form.html', context)
 
 
+from .forms import ProductForm  # Import the new form
+
+
 @login_required
 def edit_product_view(request, supermarket_id, product_barcode):
     """(UPDATE) Displays a form to edit an existing product's details."""
@@ -257,17 +557,44 @@ def edit_product_view(request, supermarket_id, product_barcode):
     product = get_object_or_404(Product, barcode=product_barcode)
 
     if request.method == 'POST':
-        product.name = request.POST.get('name', product.name)
-        product.brand = request.POST.get('brand', product.brand)
-        product.description = request.POST.get('description', product.description)
-        product.save()
-        messages.success(request, f"Successfully updated '{product.name}'.")
-        return redirect('inventory:product_detail', supermarket_id=supermarket.id, product_barcode=product.barcode)
+        # Instantiate the form with all submitted data:
+        # request.POST for text/select data
+        # request.FILES for file data
+        # instance=product to link it to the existing product
+        form = ProductForm(request.POST, request.FILES, instance=product)
+
+        if form.is_valid():
+            # Handle the custom 'clear_cover_image' checkbox manually
+            # We only clear if the box is checked AND no new file was uploaded
+            if request.POST.get('clear_cover_image') and 'cover_image' not in request.FILES:
+                if product.cover_image:
+                    product.cover_image.delete(save=False)  # Delete file from storage
+                product.cover_image = None  # Clear the field on the model
+
+            # Now save the form. This will:
+            # 1. Update all text fields, category, and suppliers.
+            # 2. Save the new 'cover_image' if one was uploaded.
+            form.save()
+
+            messages.success(request, f"Successfully updated '{product.name}'.")
+            return redirect('inventory:product_detail', supermarket_id=supermarket.id, product_barcode=product.barcode)
+
+        # If form is invalid, we fall through to the render() below
+        # The 'product' and 'supermarket' variables are already set
+
+    # --- This block now runs for GET requests OR invalid POSTs ---
+
+    # We must query for categories and suppliers to populate the dropdowns
+    categories = Category.objects.all()
+    suppliers = Supplier.objects.all()
 
     context = {
         'supermarket': supermarket,
         'product': product,
-        'is_editing': True  # To differentiate between create and edit in the template
+        'is_editing': True,
+        'categories': categories,  # This was missing before
+        'suppliers': suppliers,  # This was missing before
+        # 'form': form # Optional: pass the form to display form.errors in the template
     }
     return render(request, 'inventory/product_form.html', context)
 
@@ -364,45 +691,6 @@ def supplier_list_view(request, supermarket_id):
     suppliers = Supplier.objects.all()
     return render(request, 'inventory/management/supplier_list.html',
                   {'supermarket': supermarket, 'suppliers': suppliers})
-
-
-@login_required
-def pricing_strategy_view(request, supermarket_id):
-    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
-    if request.method == 'POST':
-        category_id = request.POST.get('category')
-        supplier_id = request.POST.get('supplier')
-
-        PricingRule.objects.create(
-            supermarket=supermarket,
-            name=request.POST.get('name'),
-            rule_type=request.POST.get('rule_type'),
-            amount=request.POST.get('amount'),
-            category_id=category_id if category_id else None,
-            supplier_id=supplier_id if supplier_id else None,
-            days_until_expiry=request.POST.get('days_until_expiry') or None
-        )
-        return redirect('inventory:pricing_strategy', supermarket_id=supermarket.id)
-    rules = supermarket.pricing_rules.all()
-    categories = Category.objects.all()
-    suppliers = Supplier.objects.all()
-    return render(request, 'inventory/management/pricing_strategy.html',
-                  {'supermarket': supermarket, 'rules': rules, 'categories': categories, 'suppliers': suppliers})
-
-
-@login_required
-def promotion_list_view(request, supermarket_id):
-    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
-    if request.method == 'POST':
-        Promotion.objects.create(supermarket=supermarket, name=request.POST.get('name'),
-                                 start_date=request.POST.get('start_date'), end_date=request.POST.get('end_date'),
-                                 discount_type=request.POST.get('discount_type'),
-                                 discount_value=request.POST.get('discount_value'))
-        return redirect('inventory:promotion_list', supermarket_id=supermarket.id)
-    promotions = supermarket.promotions.all()
-    return render(request, 'inventory/management/promotion_list.html',
-                  {'supermarket': supermarket, 'promotions': promotions})
-
 
 # --- API Endpoints ---
 @api_view(['GET', 'POST'])
@@ -627,36 +915,214 @@ def product_filter_api(request, supermarket_id):
         'has_next_page': page_obj.has_next()
     })
 
+
+# ... (all your other imports)
+from django.db.models import F
+from django.db import IntegrityError
+
+
+# ... (all your other views)
+# ... other imports ...
+from django.db.models import F
+from django.db import IntegrityError
+import logging  # Import the logging library
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
+
+
+# ... other views ...
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def scan_api(request):
-    mode, barcode, supermarket_id = request.data.get('mode'), request.data.get('barcode'), request.data.get('supermarket_id')
-    if not all([mode, supermarket_id]): return Response({'error': 'Mode and supermarket_id are required.'}, status=400)
+    mode = request.data.get('mode')
+    supermarket_id = request.data.get('supermarket_id')
+    if not all([mode, supermarket_id]):
+        return Response({'error': 'Mode and supermarket_id required.'}, status=400)
+
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
     if mode == 'lookup':
-        if not barcode: return Response({'error': 'Barcode is required.'}, status=400)
-        product, created = Product.objects.get_or_create(barcode=barcode)
-        if created or not product.name or "Product " in product.name:
-            product_info = get_product_info_cascade(barcode)
-            if product_info.get('name'):
-                product.name = product_info.get('name')
-                product.brand = product_info.get('brand')
-                product.image_url = product_info.get('image_url')
-                product.description = product_info.get('description')
-                product.save()
-        inventory_items = InventoryItem.objects.filter(supermarket=supermarket, product=product)
-        categories = list(Category.objects.values('id', 'name'))
-        return Response({'product': {'barcode': product.barcode, 'name': product.name, 'brand': product.brand, 'image_url': product.image_url}, 'inventory_items': [{'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date, 'rack_zone': item.rack_zone} for item in inventory_items], 'categories': categories})
+        barcode = request.data.get('barcode')
+        if not barcode:
+            return Response({'error': 'Barcode required.'}, status=400)
+
+        try:  # Add outer try block for general safety
+            product, created = Product.objects.get_or_create(barcode=barcode)
+
+            # --- ✅ START: Robust Scraping ---
+            if created or not product.name:
+                try:
+                    logger.info(f"Attempting to scrape info for new/incomplete product: {barcode}")
+                    product_info = get_product_info_cascade(barcode)  # Your scraping function
+                    if product_info and product_info.get('name'):
+                        product.name = product_info.get('name', f"Product {barcode}")  # Default name if needed
+                        product.brand = product_info.get('brand')
+                        product.image_url = product_info.get('image_url')
+                        # Add description if your scraper provides it
+                        # product.description = product_info.get('description')
+                        product.save()
+                        logger.info(f"Successfully scraped and saved info for {barcode}")
+                    else:
+                        logger.warning(f"Scraping yielded no useful info for {barcode}")
+                        # Optionally set a default name if created and scraping failed
+                        if created and not product.name:
+                            product.name = f"Product {barcode}"
+                            product.save()
+                except Exception as e:
+                    # Log the error but don't crash the API response
+                    logger.error(f"Error during scraping for barcode {barcode}: {e}", exc_info=True)
+                    # Ensure a default name if needed
+                    if created and not product.name:
+                        product.name = f"Product {barcode}"
+                        product.save()
+            # --- ✅ END: Robust Scraping ---
+
+            existing_items = InventoryItem.objects.filter(supermarket=supermarket, product=product).select_related(
+                'rack').order_by('expiry_date')  # Select related rack
+
+            categories = list(Category.objects.values('id', 'name'))
+
+            default_price = None
+            try:
+                # Find the default price for this product at this specific supermarket
+                product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+                default_price = product_price_entry.price
+            except ProductPrice.DoesNotExist:
+                pass  # No default price has been set, so it remains None
+
+            return Response({
+                'product': {
+                    'barcode': product.barcode,
+                    'name': product.name,
+                    'brand': product.brand,
+                    'image_url': product.display_image_url,
+                    'category_id': product.category_id,
+                    'default_store_price':default_price,
+                },
+                'existing_items': [
+                    {
+                        'id': item.id,
+                        'quantity': item.quantity,
+                        'expiry_date': item.expiry_date,
+                        'rack_id': item.rack_id,  # Return rack ID
+                        'rack_name': item.rack.name if item.rack else None,  # Return rack name
+                        'store_price': item.store_price
+                    } for item in existing_items
+                ],
+                'categories': categories
+            })
+
+        except Exception as e:
+            # Catch any other unexpected errors and return JSON
+            logger.error(f"Unexpected error in scan_api lookup for barcode {barcode}: {e}", exc_info=True)
+            return Response({'error': 'An internal server error occurred during lookup.'}, status=500)
+
+
     elif mode == 'add':
-        product = get_object_or_404(Product, barcode=barcode)
-        category = get_object_or_404(Category, id=request.data.get('category_id')) if request.data.get('category_id') else None
-        InventoryItem.objects.create(supermarket=supermarket, product=product, category=category, quantity=request.data.get('quantity', 1), expiry_date=request.data.get('expiry_date'), rack_zone=request.data.get('rack_zone', 'N/A'), store_price=request.data.get('store_price'))
-        return Response({'message': f'{product.name} added.'}, status=201)
+        data = request.data
+        try:  # Add outer try block
+            product = get_object_or_404(Product, barcode=data.get('barcode'))
+
+            category_id = data.get('category_id') or None
+            store_price = data.get('store_price') or None
+            rack_id = data.get('rack_id') or None  # Use rack_id
+            manufacture_date = data.get('manufacture_date') or None
+            quantity_to_add = int(data.get('quantity', 1))
+
+            # If no price was entered manually, try to find the default price
+            if store_price is None:
+                try:
+                    product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+                    store_price = product_price_entry.price
+                except ProductPrice.DoesNotExist:
+                    store_price = None
+
+                    # Use get_or_create with rack_id
+            item, created = InventoryItem.objects.get_or_create(
+                supermarket=supermarket,
+                product=product,
+                expiry_date=data.get('expiry_date'),
+                rack_id=rack_id,  # Use rack_id
+                store_price=store_price,
+                # Consider adding manufacture_date here if it should be part of uniqueness
+                # manufacture_date=manufacture_date,
+                defaults={
+                    'quantity': quantity_to_add,
+                    'category_id': category_id,
+                    'manufacture_date': manufacture_date
+                }
+            )
+
+            if not created:
+                item.quantity = F('quantity') + quantity_to_add
+                item.save()
+                # Use request._request.session for messages in DRF/API views if needed
+                # messages.success(request._request, f"Added {quantity_to_add} more...")
+                logger.info(f"Updated quantity for existing batch of {product.name} (Barcode: {product.barcode})")
+                return Response({'message': f'Updated quantity for existing batch of {product.name}.'}, status=200)
+            else:
+                # messages.success(request._request, f"New batch...")
+                logger.info(f"Created new batch for {product.name} (Barcode: {product.barcode})")
+                return Response({'message': f'New batch of {product.name} added.'}, status=201)
+
+        except IntegrityError:
+            logger.warning(f"IntegrityError: Attempted to add duplicate batch for barcode {data.get('barcode')}")
+            return Response(
+                {'error': 'A batch with these exact details (Product, Expiry, Rack, Price) already exists.'},
+                status=400)
+        except Exception as e:
+            logger.error(f"Error in scan_api add mode for barcode {data.get('barcode')}: {e}", exc_info=True)
+            return Response({'error': f'An error occurred: {e}'}, status=400)
+
+
     elif mode == 'remove':
-        item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
-        item.delete()
-        return Response({'message': f'Batch of {item.product.name} removed.'})
-    return Response({'error': 'Invalid mode specified.'}, status=400)
+        try:  # Add try block
+            item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
+            product_name = item.product.name
+            item.delete()
+            logger.info(f"Removed inventory batch ID {request.data.get('inventory_item_id')} ({product_name})")
+            return Response({'message': 'Batch removed.'})
+        except Exception as e:
+            logger.error(f"Error removing inventory item ID {request.data.get('inventory_item_id')}: {e}",
+                         exc_info=True)
+            return Response({'error': 'Failed to remove item.'}, status=500)
+
+    return Response({'error': 'Invalid mode.'}, status=400)
+
+# ... (rest of your views.py) ...
+
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+# def scan_api(request):
+#     mode, barcode, supermarket_id = request.data.get('mode'), request.data.get('barcode'), request.data.get('supermarket_id')
+#     if not all([mode, supermarket_id]): return Response({'error': 'Mode and supermarket_id are required.'}, status=400)
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#     if mode == 'lookup':
+#         if not barcode: return Response({'error': 'Barcode is required.'}, status=400)
+#         product, created = Product.objects.get_or_create(barcode=barcode)
+#         if created or not product.name or "Product " in product.name:
+#             product_info = get_product_info_cascade(barcode)
+#             if product_info.get('name'):
+#                 product.name = product_info.get('name')
+#                 product.brand = product_info.get('brand')
+#                 product.image_url = product_info.get('image_url')
+#                 product.description = product_info.get('description')
+#                 product.save()
+#         inventory_items = InventoryItem.objects.filter(supermarket=supermarket, product=product)
+#         categories = list(Category.objects.values('id', 'name'))
+#         return Response({'product': {'barcode': product.barcode, 'name': product.name, 'brand': product.brand, 'image_url': product.image_url}, 'inventory_items': [{'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date, 'rack_zone': item.rack_zone} for item in inventory_items], 'categories': categories})
+#     elif mode == 'add':
+#         product = get_object_or_404(Product, barcode=barcode)
+#         category = get_object_or_404(Category, id=request.data.get('category_id')) if request.data.get('category_id') else None
+#         InventoryItem.objects.create(supermarket=supermarket, product=product, category=category, quantity=request.data.get('quantity', 1), expiry_date=request.data.get('expiry_date'), rack_zone=request.data.get('rack_zone', 'N/A'), store_price=request.data.get('store_price'))
+#         return Response({'message': f'{product.name} added.'}, status=201)
+#     elif mode == 'remove':
+#         item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
+#         item.delete()
+#         return Response({'message': f'Batch of {item.product.name} removed.'})
+#     return Response({'error': 'Invalid mode specified.'}, status=400)
 
 
 
@@ -705,8 +1171,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from .models import Supermarket, Product, InventoryItem, Category, CompetitorPrice, StaffProfile, Supplier, PricingRule, \
-    Promotion
+
 from .tasks import scrape_product_task
 from .scraping_utils import get_product_info_cascade
 
@@ -753,6 +1218,7 @@ def urgent_items_api(request, supermarket_id):
                 'barcode': item.product.barcode  # --- FIX: Barcode is now included ---
             },
             'quantity': item.quantity,
+            'rack_name': item.rack.name if item.rack else 'N/A',
             'rack_zone': item.rack_zone,
             'status': item.status,
             'days_left': days_diff if days_diff >= 0 else 0,

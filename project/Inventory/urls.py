@@ -57,9 +57,12 @@ urlpatterns = [
     # --- Page Rendering URLs ---
     path('', views.home_view, name='home'),
     path('supermarket/<int:supermarket_id>/', views.supermarket_dashboard_view, name='supermarket_dashboard'),
+    path('api/supermarket/<int:supermarket_id>/stats/', views.dashboard_stats_api, name='dashboard_stats_api'),
+    path('api/supermarket/<int:supermarket_id>/urgent-items/', views.urgent_items_api, name='urgent_items_api'),
+
     path('supermarket/<int:supermarket_id>/scan/', views.scan_item_page_view, name='scan_item'),
     path('supermarket/<int:supermarket_id>/inventory/', views.inventory_list_view, name='inventory_list'),
-    path('supermarket/<int:supermarket_id>/alerts/', views.alert_monitor_view, name='alert_monitor'),
+    # path('supermarket/<int:supermarket_id>/alerts/', views.alert_monitor_view, name='alert_monitor'),
     path('supermarket/<int:supermarket_id>/pricing/', views.competitive_price_view, name='competitive_pricing'),
 
     # --- FIX: Made URL structure consistent with the rest of the app ---
@@ -79,8 +82,7 @@ urlpatterns = [
     # --- Management URLs ---
     path('supermarket/<int:supermarket_id>/staff/', views.staff_management_view, name='staff_management'),
     path('supermarket/<int:supermarket_id>/suppliers/', views.supplier_list_view, name='supplier_list'),
-    path('supermarket/<int:supermarket_id>/strategy/', views.pricing_strategy_view, name='pricing_strategy'),
-    path('supermarket/<int:supermarket_id>/promotions/', views.promotion_list_view, name='promotion_list'),
+
 
     # --- MISTAKE: Removed duplicate and conflicting URL pattern ---
     # The URL for deleting an item was defined twice with different paths and names.
@@ -89,12 +91,17 @@ urlpatterns = [
 
     # --- API Endpoints ---
     path('api/supermarkets/', views.supermarket_list_api, name='supermarket_list_api'),
-    path('api/supermarket/<int:supermarket_id>/stats/', views.dashboard_stats_api, name='dashboard_stats_api'),
-    path('api/supermarket/<int:supermarket_id>/urgent-items/', views.urgent_items_api, name='urgent_items_api'),
+    # path('api/supermarket/<int:supermarket_id>/stats/', views.dashboard_stats_api, name='dashboard_stats_api'),
+    # path('api/supermarket/<int:supermarket_id>/urgent-items/', views.urgent_items_api, name='urgent_items_api'),
     path('api/scan/', views.scan_api, name='scan_api'),
     path('api/supermarket/<int:supermarket_id>/scrape-prices/<str:product_barcode>/', views.scrape_prices_api, name='scrape_prices_api'),
 
     # --- FIX: Made API path more specific and conventional for search ---
     path('api/products/search/', views.product_search_api, name='product_search_api'),
+
+    # ✅ NEW URLs FOR RACK MANAGEMENT
+    path('<int:supermarket_id>/racks/', views.rack_list_create_view, name='rack_list'),
+    path('<int:supermarket_id>/racks/<int:rack_id>/edit/', views.rack_edit_view, name='rack_edit'),
+    path('<int:supermarket_id>/racks/<int:rack_id>/delete/', views.rack_delete_view, name='rack_delete'),
 ]
 

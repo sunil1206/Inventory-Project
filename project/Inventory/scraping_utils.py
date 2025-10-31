@@ -21,7 +21,9 @@ def get_product_info_cascade(barcode):
             prod_data = data['product']
             return {
                 'name': prod_data.get('product_name'),
+                'quantity': prod_data.get('quantity', None),
                 'brand': prod_data.get('brands', ''),
+                'nutriscore_grade': prod_data.get('nutriscore_grade', None),
                 'image_url': prod_data.get('image_url', ''),
                 'description': prod_data.get('generic_name_fr', '')
             }

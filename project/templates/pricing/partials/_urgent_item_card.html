@@ -1,0 +1,53 @@
+<div class="bg-white rounded-lg shadow-md overflow-hidden item-card"
+     data-category-id="{{ item.get_category.id|default:'' }}"
+     data-rack="{{ item.rack|default:'' }}"
+     data-expiry-date="{{ item.expiry_date|date:'Y-m-d' }}">
+    <div class="p-4">
+        <div class="flex gap-4">
+            <img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">
+            <div class="flex-grow">
+                <p class="font-bold text-gray-800">{{ item.product.name }}</p>
+                <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>
+
+                {% if item.status == 'expires_today' %}
+                <p class="text-sm font-semibold text-orange-600 mt-1">
+                    Expires Today
+                </p>
+                {% else %}
+                <p class="text-sm font-semibold text-yellow-700 mt-1">
+                    Expires in {{ item.days_left }} day{{ item.days_left|pluralize }}
+                </p>
+                {% endif %}
+
+                <p class="text-sm text-gray-500">Qty: {{ item.quantity }} | Rack: {{ item.rack|default:'N/A' }}</p>
+
+                <div class="mt-1">
+                    {% if item.suggested_price and item.store_price and item.suggested_price < item.store_price %}
+                        <span class="text-lg font-bold text-red-600">€{{ item.suggested_price }}</span>
+                        <span class="text-sm text-gray-500 line-through ml-1">€{{ item.store_price }}</span>
+                        {% if item.applied_rule %}
+                            <span class="text-xs font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full ml-2">{{ item.applied_rule.name }}</span>
+                        {% elif item.promotion %}
+                            <span class="text-xs font-semibold bg-green-100 text-green-800 px-2 py-0.5 rounded-full ml-2">{{ item.promotion.name }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="text-lg font-bold text-gray-800">€{{ item.store_price|default:'--.--' }}</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 pt-4 border-t flex justify-end gap-2">
+            <button type="button"
+                    onclick="openWastageModal({{ item.id }})"
+                    class="text-xs font-semibold bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">
+                Wastage
+            </button>
+
+            <button type="button"
+                    onclick="openSellModal({{ item.id }})"
+                    class="text-xs font-semibold bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-700">
+                Sell / Manage
+            </button>
+        </div>
+    </div>
+</div>

@@ -1,5 +1,7 @@
 from celery import shared_task
-from .models import Product, CompetitorPrice
+
+from pricing.models import CompetitorPrice
+from .models import Product
 from .scraping_utils import scrape_competitor_prices
 
 

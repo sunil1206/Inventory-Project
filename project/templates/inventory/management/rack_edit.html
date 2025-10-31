@@ -1,0 +1,51 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Edit {{ rack.name }}{% endblock %}
+{% block header %}Edit Rack{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    {% include 'includes/alerts.html' %}
+
+    <div class="mb-6">
+        <a href="{% url 'inventory:rack_list' supermarket.id %}" class="text-sm font-semibold text-blue-600 hover:underline">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Rack Management
+        </a>
+    </div>
+
+    <div class="bg-white p-6 sm:p-8 rounded-lg shadow-sm">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">
+            Edit "{{ rack.name }}"
+        </h1>
+
+        <form method="POST" action="{% url 'inventory:rack_edit' supermarket.id rack.id %}" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label for="{{ rack_form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">Rack Name</label>
+                {{ rack_form.name }}
+                {% if rack_form.name.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ rack_form.name.errors|first }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label for="{{ rack_form.description.id_for_label }}" class="block text-sm font-medium text-gray-700">Description (Optional)</label>
+                {{ rack_form.description }}
+                {% if rack_form.description.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ rack_form.description.errors|first }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mt-8 flex justify-end gap-4">
+                <a href="{% url 'inventory:rack_list' supermarket.id %}" class="px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition-colors">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

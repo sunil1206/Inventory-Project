@@ -33,7 +33,7 @@
     <!-- Header with Smart Navigation -->
     <header class="absolute top-0 left-0 w-full z-30 py-4 px-4 sm:px-6 lg:px-8">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <a href="{% if user.is_authenticated %}{% url 'inventory:home' %}{% else %}{% url 'landing_page' %}{% endif %}" class="flex items-center text-2xl font-bold text-white">
+            <a href="{% if user.is_authenticated %}{% url 'inventory:home' %}{% else %}{% url 'inventory:home' %}{% endif %}" class="flex items-center text-2xl font-bold text-white">
                 <i class="fas fa-barcode mr-3"></i>
                 <span class="text-green-400">Go</span><span>Scan</span>
             </a>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>Your Subscription Has Expired!</h2>
+    <p>Your '{{ subscription.get_plan_display }}' plan ended on {{ subscription.end_date|date:"F d, Y" }}.</p>
+    <p>Please renew your subscription to regain access to all Pro features.</p>
+
+    <a href="{% url 'payment_success' %}" class="btn btn-primary">
+        Renew for $10/month
+    </a>
+
+    <hr>
+    <a href="{% url 'account_logout' %}">Logout</a>
+</div>
+{% endblock %}

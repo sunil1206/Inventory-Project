@@ -1,0 +1,172 @@
+{% extends "inventory/base.html" %}
+{% block title %}Manage Product Defaults{% endblock %}
+{% block header %}Manage Product Defaults{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    {% include 'includes/alerts.html' %}
+    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">Set Product Defaults</h2>
+        <p class="text-gray-600 mb-4">
+            Set the default price, category, and rack for products in {{ supermarket.name }}.
+            These values will be auto-filled when adding new inventory.
+        </p>
+
+        <form method="GET" id="filter-form" class="mb-6 p-4 bg-gray-50 rounded-lg border">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="md:col-span-2 lg:col-span-4">
+                    <label class="block text-sm font-medium text-gray-700">Search</label>
+                    <input type="text" name="q" value="{{ search_query }}" placeholder="Search by name, brand, or barcode..." class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Category</label>
+                    <select name="category" id="filter-category" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                        <option value="">All Categories</option>
+                        {% for c in categories %}
+                        <option value="{{ c.id }}" {% if category_filter == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Rack</label>
+                    <select name="rack" id="filter-rack" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                        <option value="">All Racks</option>
+                        {% for r in racks %}
+                        <option value="{{ r.id }}" {% if rack_filter == r.id|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Price Status</label>
+                    <select name="price_status" id="filter-price-status" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                        <option value="">All</option>
+                        <option value="set" {% if price_status_filter == 'set' %}selected{% endif %}>Price Set</option>
+                        <option value="unset" {% if price_status_filter == 'unset' %}selected{% endif %}>Price Not Set</option>
+                    </select>
+                </div>
+                <div class="lg:col-span-4 flex justify-end gap-3 mt-2">
+                    <a href="{% url 'product_pricing:product_price_list' supermarket.id %}" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Clear</a>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        <i class="fas fa-filter mr-1"></i> Apply Filters
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Barcode</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Current Defaults</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Update Defaults</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for product in page_obj %}
+                    <tr id="product-row-{{ product.barcode }}">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center">
+                                <img src="{{ product.display_image_url }}" alt="" class="w-10 h-10 object-contain rounded-md mr-4 flex-shrink-0">
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">{{ product.name }}</div>
+                                    <div class="text-sm text-gray-500">{{ product.brand|default:'' }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="text-sm text-gray-600 font-mono">{{ product.barcode }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900">
+                                {% if product.current_price is not None %}
+                                    <span class="font-semibold">€{{ product.current_price|floatformat:2 }}</span>
+                                {% else %}
+                                    <span class="text-xs text-gray-400 italic">No Price</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-sm text-gray-500">
+                                <span class="text-xs font-medium">Cat:</span>
+                                {{ product.current_category|default:'N/A' }}
+                            </div>
+                            <div class="text-sm text-gray-500">
+                                <span class="text-xs font-medium">Rack:</span>
+                                {{ product.current_rack|default:'N/A' }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <form method="POST" class="space-y-2">
+                                {% csrf_token %}
+                                <input type="hidden" name="product_id" value="{{ product.barcode }}">
+
+                                <select name="category_id" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+                                    <option value="">-- Select Category --</option>
+                                    {% for c in categories %}
+                                    <option value="{{ c.id }}" {% if product.current_category == c.name %}selected{% endif %}>{{ c.name }}</option>
+                                    {% endfor %}
+                                </select>
+
+                                <select name="rack_id" class="w-full p-2 border border-gray-300 rounded-md text-sm">
+                                    <option value="">-- Select Rack --</option>
+                                    {% for r in racks %}
+                                    <option value="{{ r.id }}" {% if product.current_rack == r.name %}selected{% endif %}>{{ r.name }}</option>
+                                    {% endfor %}
+                                </select>
+
+                                <div class="flex gap-2">
+                                    <input type="number" step="0.01" min="0" name="price" placeholder="Price (€)"
+                                           class="w-32 p-2 border border-gray-300 rounded-md"
+                                           value="{{ product.current_price|floatformat:2|default:'' }}"  pattern="^\d+(\.\d{1,2})?$">
+                                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">Set</button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6">
+            {% if page_obj.has_other_pages %}
+            <nav class="flex items-center justify-between">
+                <div>
+                    {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}&{{ request.GET.urlencode | cut:'page=' }}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Previous</a>
+                    {% endif %}
+                </div>
+                <span class="text-sm text-gray-700">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                </span>
+                <div>
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}&{{ request.GET.urlencode | cut:'page=' }}" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Next</a>
+                    {% endif %}
+                </div>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // This script makes the filters submit automatically
+    document.addEventListener('DOMContentLoaded', function() {
+        const filterForm = document.getElementById('filter-form');
+
+        // Find all <select> dropdowns inside the filter form
+        const filterSelects = filterForm.querySelectorAll('select');
+
+        // Add an event listener to each one
+        filterSelects.forEach(function(select) {
+            select.addEventListener('change', function() {
+                // When a dropdown is changed, submit the GET form
+                filterForm.submit();
+            });
+        });
+    });
+</script>
+{% endblock %}

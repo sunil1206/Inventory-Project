@@ -1,61 +1,84 @@
 {% extends "inventory/base.html" %}
 
 {% block title %}Edit: {{ item.product.name }}{% endblock %}
+{% block header %}Edit Inventory Item{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg">
-    <div class="flex items-center mb-6">
-        <img src="{{ item.product.image_url|default:'https://placehold.co/100x100' }}" 
-             alt="{{ item.product.name }}" 
-             class="w-24 h-24 rounded-lg object-contain mr-6 border">
+<div class="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm">
+    <!-- Back Link -->
+    <div class="mb-6">
+        <a href="{% url 'inventory:inventory_list' supermarket.id %}" class="text-sm font-semibold text-blue-600 hover:underline">
+            <i class="fas fa-arrow-left mr-2"></i>Back to Inventory List
+        </a>
+    </div>
+
+    <!-- Product Header -->
+    <div class="flex items-start gap-6">
+        <img src="{{ item.product.display_image_url }}"
+             alt="{{ item.product.name }}"
+             class="w-24 h-24 rounded-lg object-contain mr-6 border bg-gray-50">
         <div>
-            <h1 class="text-3xl font-bold text-gray-800">Edit Inventory Item</h1>
-            <p class="text-lg text-gray-600">{{ item.product.name }}</p>
+            <h1 class="text-3xl font-bold text-gray-800">{{ item.product.name }}</h1>
+            <p class="text-lg text-gray-600">{{ item.product.brand|default:'No Brand' }}</p>
             <p class="text-sm text-gray-500">Barcode: {{ item.product.barcode }}</p>
         </div>
     </div>
 
-    <form method="POST" action="{% url 'inventory:edit_inventory_item' supermarket.id item.id %}">
+    <form method="POST" action="{% url 'inventory:edit_inventory_item' supermarket.id item.id %}" class="mt-8 space-y-6">
         {% csrf_token %}
-        <div class="space-y-6">
-            <!-- Grid for inputs -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Quantity -->
-                <div>
-                    <label for="id_quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
-                    <input type="number" name="quantity" id="id_quantity" value="{{ item.quantity }}" required 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <!-- Expiry Date -->
-                <div>
-                    <label for="id_expiry_date" class="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
-                    <input type="date" name="expiry_date" id="id_expiry_date" value="{{ item.expiry_date|date:'Y-m-d' }}" 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                <!-- Store Price -->
-                <div>
-                    <label for="id_store_price" class="block text-sm font-medium text-gray-700 mb-1">Store Price ($)</label>
-                    <input type="number" step="0.01" name="store_price" id="id_store_price" value="{{ item.store_price|stringformat:'.2f' }}" 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
-                
-                <!-- Rack Zone / Location -->
-                <div>
-                    <label for="id_rack_zone" class="block text-sm font-medium text-gray-700 mb-1">Rack Zone / Location</label>
-                    <input type="text" name="rack_zone" id="id_rack_zone" value="{{ item.rack_zone }}" 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                </div>
+            <!-- Quantity -->
+            <div>
+                <label for="id_quantity" class="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                <input type="number" name="quantity" id="id_quantity" value="{{ item.quantity }}" required
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Expiry Date -->
+            <div>
+                <label for="id_expiry_date" class="block text-sm font-medium text-gray-700 mb-1">Expiry Date</label>
+                <input type="date" name="expiry_date" id="id_expiry_date" value="{{ item.expiry_date|date:'Y-m-d' }}" required
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Manufacture Date -->
+            <div>
+                <label for="id_manufacture_date" class="block text-sm font-medium text-gray-700 mb-1">Manufacture Date (Optional)</label>
+                <input type="date" name="manufacture_date" id="id_manufacture_date"
+                       {% if item.manufacture_date %}value="{{ item.manufacture_date|date:'Y-m-d' }}"{% endif %}
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Store Price -->
+            <div>
+                <label for="id_store_price" class="block text-sm font-medium text-gray-700 mb-1">Store Price (€) (Optional)</label>
+                <input type="number" step="0.01" name="store_price" id="id_store_price" value="{{ item.store_price|default:'' }}"
+                       placeholder="0.00"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Rack / Location -->
+            <div class="md:col-span-2">
+                <label for="id_rack" class="block text-sm font-medium text-gray-700 mb-1">Rack / Location (Optional)</label>
+                <select name="rack" id="id_rack" class="w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">---------</option>
+                    {% for rack in racks %}
+                        <option value="{{ rack.id }}" {% if item.rack and item.rack.id == rack.id %}selected{% endif %}>
+                            {{ rack.name }}
+                        </option>
+                    {% endfor %}
+                </select>
             </div>
 
             <!-- Category -->
-            <div>
-                <label for="id_category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
+            <div class="md:col-span-2">
+                <label for="id_category" class="block text-sm font-medium text-gray-700 mb-1">Category (Optional)</label>
                 <select name="category" id="id_category" class="w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                     <option value="">---------</option>
                     {% for category in categories %}
-                        <option value="{{ category.id }}" {% if item.category.id == category.id %}selected{% endif %}>
+                        <!-- ✅ FIX: Checks if item.get_category exists before accessing .id -->
+                        <option value="{{ category.id }}" {% if item.get_category and item.get_category.id == category.id %}selected{% endif %}>
                             {{ category.name }}
                         </option>
                     {% endfor %}

@@ -12,7 +12,7 @@
         transform: translateY(-5px);
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
     }
-    #scanner-container video {
+    #reader video {
         width: 100% !important;
         height: 100% !important;
         object-fit: cover;
@@ -21,12 +21,12 @@
 
 <div class="max-w-4xl mx-auto">
     <div class="text-center mb-8">
-        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Add to Inventory</h1>
+        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Scan & Manage Inventory</h1>
         <p class="text-lg text-gray-500 mt-2">Choose your preferred method to find a product.</p>
     </div>
 
     <!-- Main Status/Error Display Area -->
-    <div id="main-status-container" class="mb-6"></div>
+    <div id="main-status-container" class="mb-6 fixed top-24 right-6 z-[100] w-full max-w-sm"></div>
 
     <!-- Main Content Area -->
     <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-lg min-h-[450px]">
@@ -62,13 +62,9 @@
 
             <!-- 1. Scan with Camera Mode -->
             <div id="mode-scan" class="hidden">
-                <div id="scanner-container" class="relative w-full h-96 bg-gray-900 rounded-lg overflow-hidden">
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="w-3/4 h-1/2 border-4 border-dashed border-gray-500 rounded-lg"></div>
-                        <p id="scanner-status" class="absolute text-white bottom-4 bg-black bg-opacity-50 px-3 py-1 rounded-md">Initializing camera...</p>
-                    </div>
-                </div>
+                <div id="reader" class="relative w-full h-96 bg-gray-900 rounded-lg overflow-hidden"></div>
                 <div id="scan-result" class="mt-4 text-center font-semibold"></div>
+                <p id="scanner-status" class="mt-2 text-center text-gray-500 text-sm">Initializing camera...</p>
             </div>
 
             <!-- 2. Manual Entry Mode -->
@@ -105,6 +101,18 @@
         </div>
 
     </div>
+
+    <!-- Add/Remove Mode Toggle -->
+    <div class="mb-6 flex justify-center">
+        <div class="relative flex w-full max-w-sm p-1 bg-gray-200 rounded-full">
+            <span id="glider" class="absolute top-1 left-1 h-10 w-1/2 bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out"></span>
+            <button id="add-mode-btn" class="relative z-10 w-1/2 py-2 text-center font-semibold text-green-600">Add Mode</button>
+            <button id="remove-mode-btn" class="relative z-10 w-1/2 py-2 text-center font-semibold text-gray-500">Remove Mode</button>
+        </div>
+    </div>
+
+    <!-- Dynamic Form Area (for Remove Mode) -->
+    <div id="form-container" class="mt-8"></div>
 </div>
 
 <!-- Add to Inventory Modal -->
@@ -122,24 +130,37 @@
                 <form id="add-inventory-form">
                     {% csrf_token %}
                     <div class="space-y-4 text-left">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Quantity</label>
-                            <input type="number" name="quantity" id="modal-quantity" value="1" min="1"  class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Quantity</label>
+                                <input type="number" name="quantity" id="modal-quantity" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Expiry Date</label>
+                                <input type="date" name="expiry_date" id="modal-expiry-date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            </div>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Expiry Date</label>
-                            <input type="date" name="expiry_date" id="modal-expiry-date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700">Manufacture Date (Optional)</label>
+                            <input type="date" name="manufacture_date" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Store Price (EUR)</label>
-                            <input type="number" step="0.01" name="store_price" placeholder="0.00" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <label class="block text-sm font-medium text-gray-700">Store Price (€) (Optional)</label>
+                            <input type="number" step="0.01" name="store_price" id="modal-store-price" placeholder="Auto-fills from default price" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Rack / Location</label>
-                            <input type="text" name="rack_zone" placeholder="e.g., Aisle 5, Shelf 3" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                            <!-- ✅ FIX: Changed to 'rack_id' and is now a <select> -->
+                            <label class="block text-sm font-medium text-gray-700">Rack / Location (Optional)</label>
+                            <select name="rack_id" id="modal-rack" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                                <option value="">Select a rack...</option>
+                                <!-- This is populated from the view -->
+                                {% for rack in racks %}
+                                    <option value="{{ rack.id }}">{{ rack.name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                          <div>
-                            <label class="block text-sm font-medium text-gray-700">Category</label>
+                            <label class="block text-sm font-medium text-gray-700">Category (Optional)</label>
                             <select name="category_id" id="modal-category-select" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
                                 <!-- Populated by JS -->
                             </select>
@@ -177,14 +198,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const scannerStatus = document.getElementById('scanner-status');
     const mainStatusContainer = document.getElementById('main-status-container');
     const modalProductImage = document.getElementById('modal-product-image');
+    const modalStorePriceInput = document.getElementById('modal-store-price');
 
     // --- State & Config ---
     let html5QrCode;
     let productForModal = null;
+    let currentMode = 'add'; // 'add' or 'remove'
     const supermarketId = {{ supermarket.id }};
     const csrfToken = '{{ csrf_token }}';
 
-    // --- Core UI Logic ---
+    // --- Core UI Logic & Event Listeners ---
     function switchMode(selectedMode) {
         mainStatusContainer.innerHTML = '';
         choiceContainer.classList.add('hidden');
@@ -199,8 +222,22 @@ document.addEventListener('DOMContentLoaded', function() {
     function showChoices() {
         interfacePanes.classList.add('hidden');
         choiceContainer.classList.remove('hidden');
+        formContainer.innerHTML = '';
         mainStatusContainer.innerHTML = '';
         stopScanner();
+    }
+
+    function setMode(mode) {
+        currentMode = mode;
+        formContainer.innerHTML = '';
+        mainStatusContainer.innerHTML = '';
+        const isAdd = mode === 'add';
+        const glider = document.getElementById('glider');
+        glider.style.transform = isAdd ? 'translateX(0%)' : 'translateX(100%)';
+        document.getElementById('add-mode-btn').classList.toggle('text-green-600', isAdd);
+        document.getElementById('add-mode-btn').classList.toggle('text-gray-500', !isAdd);
+        document.getElementById('remove-mode-btn').classList.toggle('text-red-600', !isAdd);
+        document.getElementById('remove-mode-btn').classList.toggle('text-gray-500', isAdd);
     }
 
     // --- Event Listeners ---
@@ -208,6 +245,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('select-manual').addEventListener('click', () => switchMode('manual'));
     document.getElementById('select-search').addEventListener('click', () => switchMode('search'));
     document.getElementById('back-to-choices-btn').addEventListener('click', showChoices);
+
+    document.getElementById('add-mode-btn').addEventListener('click', () => setMode('add'));
+    document.getElementById('remove-mode-btn').addEventListener('click', () => setMode('remove'));
+
     manualLookupForm.addEventListener('submit', handleManualLookup);
     modalForm.addEventListener('submit', handleModalFormSubmit);
     document.getElementById('close-modal-btn').addEventListener('click', closeAddModal);
@@ -219,7 +260,12 @@ document.addEventListener('DOMContentLoaded', function() {
             success: { border: 'border-green-500', bg: 'bg-green-100', text: 'text-green-700' },
             error: { border: 'border-red-500', bg: 'bg-red-100', text: 'text-red-700' }
         };
-        mainStatusContainer.innerHTML = `<div class="${colors[type].bg} border-l-4 ${colors[type].border} ${colors[type].text} p-4 rounded-lg shadow"><p class="font-bold">${title}</p><p>${details}</p></div>`;
+        const alertHtml = `<div class="p-4 mb-4 rounded-lg shadow-lg ${colors[type].bg} ${colors[type].border} ${colors[type].text} border-l-4" role="alert">
+            <p class="font-bold">${title}</p>
+            <p>${details}</p>
+        </div>`;
+        mainStatusContainer.innerHTML = alertHtml;
+        setTimeout(() => mainStatusContainer.innerHTML = '', 5000);
     }
 
     // --- Modal Logic ---
@@ -228,9 +274,18 @@ document.addEventListener('DOMContentLoaded', function() {
         modalProductName.textContent = `Add "${product.name}"`;
         modalProductImage.src = product.image_url || 'https://placehold.co/200x200?text=No+Image';
 
+        // Populate categories and pre-select
         let categoryOptions = categories.map(cat => `<option value="${cat.id}" ${cat.id === product.category_id ? 'selected' : ''}>${cat.name}</option>`).join('');
         modalCategorySelect.innerHTML = `<option value="">Select a category...</option>${categoryOptions}`;
 
+        // ✅ FIX: Auto-fill the store price from the API data
+        if (product.default_store_price) {
+            modalStorePriceInput.value = product.default_store_price;
+        } else {
+            modalStorePriceInput.value = ''; // Clear it if no default is set
+        }
+
+        // Set smart defaults
         const expiryDateInput = document.getElementById('modal-expiry-date');
         const quantityInput = document.getElementById('modal-quantity');
         const today = new Date().toISOString().split('T')[0];
@@ -238,9 +293,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const nextWeek = new Date();
         nextWeek.setDate(nextWeek.getDate() + 7);
         expiryDateInput.value = nextWeek.toISOString().split('T')[0];
-        setTimeout(() => quantityInput.focus(), 100);
 
         modal.classList.remove('hidden');
+        setTimeout(() => quantityInput.focus(), 100);
     }
 
     function closeAddModal() {
@@ -257,6 +312,12 @@ document.addEventListener('DOMContentLoaded', function() {
         data.barcode = productForModal.barcode;
         data.supermarket_id = supermarketId;
         data.mode = 'add';
+
+        // Ensure empty optional fields are sent as 'null' or empty string
+        data.store_price = data.store_price || null;
+        data.rack_id = data.rack_id || null;
+        data.category_id = data.category_id || null;
+        data.manufacture_date = data.manufacture_date || null;
 
         showMainAlert('Adding item...', 'Please wait.', 'info');
         closeAddModal();
@@ -293,13 +354,75 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!response.ok) throw new Error(data.error || 'Request failed');
 
             mainStatusContainer.innerHTML = '';
-            openAddModal(data.product, data.categories);
 
+            // ✅ UPDATED: Check for current operation mode
+            if (currentMode === 'add') {
+                openAddModal(data.product, data.categories);
+            } else {
+                // Handle 'remove' mode
+                if (data.existing_items && data.existing_items.length > 0) {
+                    renderRemoveForm(data.product, data.existing_items);
+                } else {
+                    showMainAlert('Not in Inventory', `"${data.product.name}" is not in your inventory.`, 'error');
+                }
+            }
         } catch (error) {
             mainStatusContainer.innerHTML = '';
             showMainAlert('API Error', error.message, 'error');
             showChoices();
         }
+    }
+
+    // --- Render Remove Form ---
+    function renderRemoveForm(product, items) {
+        let itemsHtml = items.map(i => `
+            <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50">
+                <input type="radio" name="inventory_item_id" value="${i.id}" class="h-4 w-4">
+                <div class="ml-3">
+                    <p class="font-semibold">Expires: ${i.expiry_date} (Qty: ${i.quantity})</p>
+                    <p class="text-sm text-gray-500">Location: ${i.rack_name || 'N/A'} | Price: €${i.store_price || '--'}</p>
+                </div>
+            </label>`).join('');
+
+        const formHtml = `
+        <div class="bg-white p-6 rounded-lg shadow-lg">
+            <div class="flex items-center gap-4 mb-4">
+                <img src="${product.image_url || 'https://placehold.co/96x96'}" class="w-24 h-24 object-contain rounded">
+                <div>
+                    <h3 class="text-lg font-bold">${product.name}</h3>
+                    <p class="text-gray-500">${product.brand || ''}</p>
+                </div>
+            </div>
+            <form id="remove-item-form">
+                <fieldset class="space-y-2">
+                    <legend class="font-semibold mb-2">Select a batch to remove:</legend>
+                    ${itemsHtml}
+                </fieldset>
+                <button type="submit" class="mt-4 w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700">Remove Selected Batch</button>
+            </form>
+        </div>`;
+        formContainer.innerHTML = formHtml;
+
+        document.getElementById('remove-item-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const itemId = new FormData(e.target).get('inventory_item_id');
+            if(!itemId) { showMainAlert('Selection Required', 'Please select a batch to remove.', 'error'); return; }
+
+            showMainAlert('Removing item...', 'Please wait.', 'info');
+            try {
+                const res = await fetch('/api/scan/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                    body: JSON.stringify({ inventory_item_id: itemId, supermarket_id: supermarketId, mode: 'remove' })
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.error);
+                showMainAlert('Success!', 'Item batch removed.', 'success');
+                formContainer.innerHTML = '';
+            } catch(err) {
+                showMainAlert('Error', err.message, 'error');
+            }
+        });
     }
 
     // --- Mode 1: Scanner ---
@@ -311,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     async function startScanner() {
         if (html5QrCode && html5QrCode.isScanning) return;
-        html5QrCode = new Html5Qrcode("scanner-container");
+        html5QrCode = new Html5Qrcode("reader");
         const config = { fps: 10, qrbox: { width: 250, height: 150 } };
         scannerStatus.textContent = "Requesting camera access...";
         try {
@@ -350,7 +473,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const query = searchInput.value;
         const categoryId = categoryFilter.value;
         if (query.length < 2 && !categoryId) {
-            searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Start typing to search or select a category.</p>`;
+            searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Start typing or select a category.</p>`;
             return;
         }
 
@@ -390,6 +513,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target && e.target.classList.contains('add-from-search-btn')) {
             const product = JSON.parse(e.target.dataset.product);
             const categories = JSON.parse(e.target.dataset.categories);
+            // This button only ever adds, so we can call openAddModal directly
             openAddModal(product, categories);
         }
     });

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Supermarket, Category, Product, InventoryItem, CompetitorPrice
+from .models import Supermarket, Category, Product, InventoryItem
 
 
 @admin.register(Supermarket)
@@ -53,14 +53,52 @@ class InventoryItemAdmin(admin.ModelAdmin):
     list_select_related = ('product', 'supermarket', 'category')
 
 
-@admin.register(CompetitorPrice)
-class CompetitorPriceAdmin(admin.ModelAdmin):
-    """
-    Admin configuration for the CompetitorPrice model.
-    """
-    list_display = ('product', 'competitor_name', 'price', 'scraped_at')
-    list_filter = ('competitor_name', 'scraped_at')
-    search_fields = ('product__name', 'competitor_name')
-    ordering = ('-scraped_at',)
-    raw_id_fields = ('product',)
+from django.contrib import admin
+from .models import ProductPrice
 
+
+@admin.register(ProductPrice)
+class ProductPriceAdmin(admin.ModelAdmin):
+    """
+    Admin configuration for the ProductPrice (Price List) model.
+    """
+
+    # --- List View ---
+    # Customize what's shown in the main admin list
+    list_display = (
+        'product',
+        'supermarket',
+        'price',
+        'last_updated'
+    )
+
+    # --- Editing ---
+    # Allow editing the price directly from the list view
+    list_editable = ('price',)
+
+    # --- Filtering & Searching ---
+    # Add a filter sidebar. Filtering by supermarket is most useful.
+    list_filter = ('supermarket',)
+
+    # Enable searching by product name or supermarket name
+    search_fields = ('product__name', 'supermarket__name')
+
+    # --- Form View ---
+    # Fields to display when editing a single entry
+    fields = (
+        'supermarket',
+        'product',
+        'price',
+        'last_updated'
+    )
+
+    # Make 'last_updated' read-only, as it's set automatically
+    readonly_fields = ('last_updated',)
+
+    # --- Performance Optimization ---
+    # For large numbers of products or supermarkets,
+    # this replaces slow dropdowns with a search-based lookup widget.
+    raw_id_fields = ('product', 'supermarket')
+
+    # Set default ordering
+    ordering = ('product__name', 'supermarket__name')

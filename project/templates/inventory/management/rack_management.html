@@ -1,0 +1,57 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Manage Racks{% endblock %}
+{% block header %}Manage Racks & Locations{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    {% include 'includes/alerts.html' %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+        <div class="md:col-span-1 bg-white p-6 rounded-lg shadow-sm h-fit">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Create New Rack</h2>
+            <form method="POST" action="{% url 'inventory:rack_list' supermarket.id %}" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label for="{{ rack_form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">Rack Name</label>
+                    {{ rack_form.name }}
+                </div>
+                <div>
+                    <label for="{{ rack_form.description.id_for_label }}" class="block text-sm font-medium text-gray-700">Description (Optional)</label>
+                    {{ rack_form.description }}
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-plus mr-2"></i>Create Rack
+                </button>
+            </form>
+        </div>
+
+        <div class="md:col-span-2 bg-white p-6 rounded-lg shadow-sm">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Existing Racks for {{ supermarket.name }}</h2>
+            <div class="space-y-3">
+                {% for rack in racks %}
+                    <div class="p-3 border rounded-lg flex justify-between items-center bg-gray-50">
+                        <div>
+                            <p class="font-semibold text-gray-900">{{ rack.name }}</p>
+                            <p class="text-sm text-gray-500">{{ rack.description|default:"No description" }}</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <a href="{% url 'inventory:rack_edit' supermarket.id rack.id %}" class="text-gray-400 hover:text-blue-600" title="Edit Rack">
+                                <i class="fas fa-pencil-alt"></i>
+                            </a>
+                            <form method="POST" action="{% url 'inventory:rack_delete' supermarket.id rack.id %}" onsubmit="return confirm('Are you sure? This will unassign all items in this rack.');">
+                                {% csrf_token %}
+                                <button type="submit" class="text-gray-400 hover:text-red-600" title="Delete Rack">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="text-gray-500 text-center py-4 text-sm">No racks created yet.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

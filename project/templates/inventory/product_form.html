@@ -2,30 +2,50 @@
 
 {% block title %}{% if is_editing %}Edit {{ product.name }}{% else %}Create New Product{% endif %}{% endblock %}
 
+{% block header %}{% if is_editing %}Edit Product{% else %}Create New Product{% endif %}{% endblock %}
+
 {% block content %}
-<div class="max-w-2xl mx-auto bg-white p-8 rounded-xl shadow-lg">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6">
+<div class="max-w-2xl mx-auto bg-white p-6 sm:p-8 rounded-lg shadow-sm">
+
+    <!-- Back Link -->
+    <div class="mb-6">
         {% if is_editing %}
-            Edit Product Details
+            <a href="{% url 'inventory:product_detail' supermarket.id product.barcode %}" class="text-sm font-semibold text-blue-600 hover:underline">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Product Details
+            </a>
         {% else %}
-            Create a New Product
+             <a href="{% url 'inventory:product_list' supermarket.id %}" class="text-sm font-semibold text-blue-600 hover:underline">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Product Catalog
+            </a>
+        {% endif %}
+    </div>
+
+    <h1 class="text-2xl font-bold text-gray-800 mb-6">
+        {% if is_editing %}
+            Edit {{ product.name }}
+        {% else %}
+            Create a New Product in Catalog
         {% endif %}
     </h1>
 
-    <form method="POST" action="{% if is_editing %}{% url 'inventory:edit_product' supermarket.id product.barcode %}{% else %}{% url 'inventory:create_product' supermarket.id %}{% endif %}">
+    <!--
+      This form is used for both CREATE and UPDATE.
+      enctype="multipart/form-data" is CRITICAL for file uploads (cover_image).
+    -->
+    <form method="POST" enctype="multipart/form-data" action="{% if is_editing %}{% url 'inventory:edit_product' supermarket.id product.barcode %}{% else %}{% url 'inventory:create_product' supermarket.id %}{% endif %}">
         {% csrf_token %}
         <div class="space-y-6">
-            
+
             <!-- Barcode -->
             <div>
-                <label for="id_barcode" class="block text-sm font-medium text-gray-700 mb-1">Barcode (UPC/EAN) <span class="text-red-500">*</span></label>
-                <input type="text" name="barcode" id="id_barcode" value="{{ product.barcode|default:'' }}" 
+                <label for="id_barcode" class="block text-sm font-medium text-gray-700 mb-1">Barcode (EAN/UPC) <span class="text-red-500">*</span></label>
+                <input type="text" name="barcode" id="id_barcode" value="{{ product.barcode|default:'' }}"
                        {% if is_editing %}readonly{% endif %}
-                       required 
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
+                       required
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm
                               {% if is_editing %}bg-gray-100 text-gray-500 cursor-not-allowed{% else %}focus:ring-blue-500 focus:border-blue-500{% endif %}">
                 {% if is_editing %}
-                <p class="text-xs text-gray-500 mt-1">The barcode cannot be changed after a product is created.</p>
+                <p class="text-xs text-gray-500 mt-1">Barcode cannot be changed after creation.</p>
                 {% endif %}
             </div>
 
@@ -38,18 +58,69 @@
 
             <!-- Brand -->
             <div>
-                <label for="id_brand" class="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+                <label for="id_brand" class="block text-sm font-medium text-gray-700 mb-1">Brand (Optional)</label>
                 <input type="text" name="brand" id="id_brand" value="{{ product.brand|default:'' }}"
                        class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
             </div>
 
+            <!-- Category -->
+            <div>
+                <label for="id_category" class="block text-sm font-medium text-gray-700 mb-1">Category (Optional)</label>
+                <select name="category" id="id_category" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">---------</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if product.category.id == category.id %}selected{% endif %}>
+                            {{ category.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Cover Image (File Upload) -->
+            <div>
+                <label for="id_cover_image" class="block text-sm font-medium text-gray-700 mb-1">Cover Image (Optional)</label>
+                <input type="file" name="cover_image" id="id_cover_image" accept="image/*"
+                       class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+
+                {% if is_editing and product.cover_image %}
+                    <div class="mt-2 flex items-center">
+                        <img src="{{ product.cover_image.url }}" alt="Current Image" class="w-20 h-20 object-cover rounded-md">
+                        <label for="clear_cover_image" class="ml-4 flex items-center text-sm">
+                            <input type="checkbox" name="clear_cover_image" id="clear_cover_image" class="h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500">
+                            <span class="ml-2 text-gray-700">Clear current image</span>
+                        </label>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Image URL (from scraping) -->
+            <div>
+                <label for="id_image_url" class="block text-sm font-medium text-gray-700 mb-1">Scraped Image URL (Optional)</LabeL>
+                <input type="url" name="image_url" id="id_image_url" value="{{ product.image_url|default:'' }}"
+                       placeholder="https://example.com/image.jpg"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- Suppliers -->
+            <div>
+                <label for="id_suppliers" class="block text-sm font-medium text-gray-700 mb-1">Suppliers (Optional)</label>
+                <select name="suppliers" id="id_suppliers" multiple
+                        class="w-full h-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    {% for supplier in suppliers %}
+                        <option value="{{ supplier.id }}" {% if supplier in product.suppliers.all %}selected{% endif %}>
+                            {{ supplier.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Hold Ctrl (or Cmd on Mac) to select multiple suppliers.</p>
+            </div>
+
             <!-- Description -->
             <div>
-                <label for="id_description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label for="id_description" class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
                 <textarea name="description" id="id_description" rows="4"
                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">{{ product.description|default:'' }}</textarea>
             </div>
-
         </div>
 
         <!-- Action Buttons -->
@@ -75,3 +146,4 @@
     </form>
 </div>
 {% endblock %}
+

@@ -11,7 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
 from pathlib import Path
-
+from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,8 +25,8 @@ SECRET_KEY = 'django-insecure-huo7-ub*11nr@satj^vifj+58_7*3+g#fm%r+$f3$bxp14-n^j
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
+ALLOWED_HOSTS = ['goscan.linustech.in', 'www.goscan.linustech.in']
+# ALLOWED_HOSTS = []
 SITE_ID = 1
 
 # Application definition
@@ -42,9 +42,11 @@ INSTALLED_APPS = [
     'django.contrib.sitemaps',
     'core',
     'seo',
+    'pricing',
+    'product_price',
 'Inventory',
-'sslserver',
     'users',
+'sslserver',
 
 'rest_framework',
     # 'account',
@@ -55,7 +57,7 @@ INSTALLED_APPS = [
 
 ]
 
-# AUTH_USER_MODEL = 'account.Account'
+AUTH_USER_MODEL = 'users.Account'
 
 # Add this line - it's required for django.contrib.sites
 SITE_ID = 1
@@ -66,7 +68,7 @@ AUTHENTICATION_BACKENDS = [
     'allauth.account.auth_backends.AuthenticationBackend',
 ]
 
-LOGIN_REDIRECT_URL = '/dashboard/' # Redirect to dashboard after login
+LOGIN_REDIRECT_URL = '/users/dashboard/' # Redirect to dashboard after login
 LOGOUT_REDIRECT_URL = '/accounts/login/' # Redirect to login page after logout
 ACCOUNT_LOGOUT_ON_GET = True # Allows logout via a simple link click
 
@@ -82,8 +84,6 @@ SOCIALACCOUNT_PROVIDERS = {
         }
     }
 }
-
-# settings.py
 
 SCRAPER_API_KEY = '796f799a12e92a90295ca540f151abe2'
 
@@ -101,6 +101,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+'allauth.account.middleware.AccountMiddleware', # from allauth
+
+    # It should come AFTER AuthenticationMiddleware
+    'users.middleware.SubscriptionCheckMiddleware',
 ]
 
 ROOT_URLCONF = 'project.urls'
@@ -127,13 +132,24 @@ WSGI_APPLICATION = 'project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+# settings.py
+load_dotenv()
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASS'),
+        'HOST': os.environ.get('DB_HOST'),
+        'PORT': os.environ.get('DB_PORT'),
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -157,10 +173,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'fr-fr'
 
-# TIME_ZONE = 'Asia/Kolkata'
 TIME_ZONE = 'Europe/Paris'
+
 USE_I18N = True
 
 USE_TZ = True
@@ -180,5 +196,3 @@ MEDIA_ROOT =os.path.join(BASE_DIR,'media')
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

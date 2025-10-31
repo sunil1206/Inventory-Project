@@ -15,11 +15,16 @@
 
 <!-- Search and Filter Form -->
 <div class="bg-white p-4 rounded-lg shadow-md mb-6">
-    <form method="GET" action="{% url 'inventory:inventory_list' supermarket.id %}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+    <!-- ✅ FIX: Updated grid to 6 columns to fit all filters -->
+    <form method="GET" action="{% url 'inventory:inventory_list' supermarket.id %}" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+
+        <!-- Search Input -->
         <div class="md:col-span-2">
             <label for="q" class="block text-sm font-medium text-gray-700">Search Products</label>
             <input type="text" name="q" id="q" value="{{ search_query|default:'' }}" class="mt-1 w-full p-2 border border-gray-300 rounded-md" placeholder="e.g., Milk, Coca-Cola...">
         </div>
+
+        <!-- Category Filter -->
         <div>
             <label for="category" class="block text-sm font-medium text-gray-700">Category</label>
             <select name="category" id="category" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
@@ -29,6 +34,31 @@
                 {% endfor %}
             </select>
         </div>
+
+        <!-- ✅ ADDED: Status Filter Dropdown -->
+        <div>
+            <label for="status" class="block text-sm font-medium text-gray-700">Item Status</label>
+            <select name="status" id="status" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                <option value="">All Statuses</option>
+                <option value="fresh" {% if status_filter == 'fresh' %}selected{% endif %}>Fresh</option>
+                <option value="expires_soon" {% if status_filter == 'expires_soon' %}selected{% endif %}>Expires Soon</option>
+                <option value="expires_today" {% if status_filter == 'expires_today' %}selected{% endif %}>Expires Today</option>
+                <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>Expired</option>
+            </select>
+        </div>
+
+        <!-- ✅ ADDED: Rack Filter Dropdown -->
+        <div>
+            <label for="rack" class="block text-sm font-medium text-gray-700">Rack / Location</label>
+            <select name="rack" id="rack" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                <option value="">All Racks</option>
+                {% for rack in racks %}
+                <option value="{{ rack.id }}" {% if rack_filter == rack.id|stringformat:"s" %}selected{% endif %}>{{ rack.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Submit Button -->
         <div>
             <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg hover:bg-blue-700">Filter</button>
         </div>
@@ -46,51 +76,72 @@
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expiry Date</th>
+                    <!-- ✅ ADDED: New Table Header -->
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
                 {% for item in inventory_items %}
                 <tr class="block md:table-row mb-4 md:mb-0 border md:border-none rounded-lg shadow-sm md:shadow-none">
+                    <!-- Product -->
                     <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell border-b md:border-b-0">
                         <div class="flex items-center">
-                            <div class="flex-shrink-0 h-12 w-12"><img class="h-12 w-12 rounded-md object-contain" src="{{ item.product.image_url|default:'https://placehold.co/48x48' }}" alt=""></div>
+                            <div class="flex-shrink-0 h-12 w-12"><img class="h-12 w-12 rounded-md object-contain" src="{{ item.product.display_image_url }}" alt=""></div>
                             <div class="ml-4">
                                 <div class="text-sm font-medium text-gray-900">{{ item.product.name }}</div>
                                 <div class="text-sm text-gray-500">{{ item.product.brand|default:'N/A' }}</div>
                             </div>
                         </div>
                     </td>
+                    <!-- Category -->
                     <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Category:'] before:font-bold before:float-left md:before:content-['']">
-                        <!-- ✅ FIX: Check if item.category exists before trying to access its name -->
                         <span class="text-sm text-gray-600">
-                            {% if item.category %}
-                                {{ item.category.name }}
+                            {% if item.get_category %}
+                                {{ item.get_category.name }}
                             {% else %}
                                 <span class="text-gray-400 italic">Uncategorized</span>
                             {% endif %}
                         </span>
                     </td>
+                    <!-- Status -->
                     <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Status:'] before:font-bold before:float-left md:before:content-['']">
                         {% if item.status == 'fresh' %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Fresh</span>
-                        {% elif item.status == 'soon' %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Expires Soon</span>
+                        {% elif item.status == 'expires_soon' %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Expires Soon</span>
+                        {% elif item.status == 'expires_today' %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">Expires Today</span>
                         {% elif item.status == 'expired' %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Expired</span>
                         {% endif %}
                     </td>
+                    <!-- Quantity -->
                     <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Quantity:'] before:font-bold before:float-left md:before:content-['']"><span class="text-sm text-gray-900">{{ item.quantity }}</span></td>
+                    <!-- Expiry Date -->
                     <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Expiry_Date:'] before:font-bold before:float-left md:before:content-['']"><span class="text-sm text-gray-500">{{ item.expiry_date|date:"Y-m-d" }}</span></td>
+
+                    <!-- ✅ ADDED: New Table Cell for Rack -->
+                    <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left border-b md:border-b-0 before:content-['Location:'] before:font-bold before:float-left md:before:content-['']">
+                        <span class="text-sm text-gray-600">
+                            {% for rack in racks %}
+                        <option value="{{ rack.id }}" {% if item.rack and item.rack.id == rack.id %}selected{% endif %}>
+                            {{ rack.name }}
+                        </option>
+                    {% endfor %}
+                        </span>
+                    </td>
+
+                    <!-- Actions -->
                     <td class="p-4 md:px-6 md:py-4 whitespace-nowrap block md:table-cell text-right md:text-left">
                         <div class="flex items-center justify-end md:justify-start gap-4">
                             <a href="{% url 'inventory:edit_inventory_item' supermarket.id item.id %}" class="text-blue-600 hover:text-blue-900">Edit</a>
                             <form method="POST" action="{% url 'inventory:delete_inventory_item' supermarket.id item.id %}" onsubmit="return confirm('Are you sure?');">
                                 {% csrf_token %}
-                                <button type="submit" class="text-red-600 hover:text-red-900">Delete</button>
+                                <button type*="submit" class="text-red-600 hover:text-red-900">Delete</button>
                             </form>
                         </div>
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="6" class="px-6 py-12 text-center text-gray-500"><p class="font-semibold">No inventory items found.</p></td></tr>
+                <!-- ✅ FIX: Colspan updated to 7 -->
+                <tr><td colspan="7" class="px-6 py-12 text-center text-gray-500"><p class="font-semibold">No inventory items found.</p></td></tr>
                 {% endfor %}
             </tbody>
         </table>
