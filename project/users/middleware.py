@@ -26,7 +26,7 @@ class SubscriptionCheckMiddleware:
             try:
                 if not request.user.subscription.is_valid:
                     messages.warning(request, "Your plan has expired. Please renew your subscription to continue.")
-                    return redirect('subscription_renew')
+                    return redirect('users:subscription_renew')
             except Subscription.DoesNotExist:
                 # This shouldn't happen because of your signal, but it's safe to handle
                 Subscription.objects.create(user=request.user)

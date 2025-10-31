@@ -11,6 +11,7 @@ urlpatterns = [
     path('profile/edit/', views.profile_edit_view, name='profile_edit'),
  path('renew-subscription/', views.subscription_renew_view, name='subscription_renew'),
     path('payment-success/', views.payment_success_view, name='payment_success'), # Example
+    # path('subscribe/renew/', views.renew_page, name='renew_subscription'),  # <-- Oh, the name is 'renew_subscription'
 
 
     # All other auth URLs (login, logout, password_reset, google_login)
