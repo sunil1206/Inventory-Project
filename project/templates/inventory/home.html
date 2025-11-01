@@ -1,19 +1,13 @@
-
+{% extends "inventory/base_public.html" %}
 {% load static %}
 
+{% block title %}GoScan - Smart Inventory & Pricing for Supermarkets{% endblock %}
 
-<!-- Libraries -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% block content %}
-
-
-
 <!-- Header (Unchanged) -->
 <header class="absolute top-0 left-0 w-full z-30 py-4 px-4 sm:px-6 lg:px-8">
     <div class="max-w-7xl mx-auto flex justify-between items-center">
-        <a href="{% url 'inventory:home' %}" class="flex items-center text-2xl font-bold text-white">
+        <a href="{% url 'landing_page' %}" class="flex items-center text-2xl font-bold text-white">
             <i class="fas fa-barcode mr-3"></i>
             <span class="text-green-400">Go</span><span>Scan</span>
         </a>
@@ -29,6 +23,7 @@
             {% else %}
                 <a href="#features" class="text-white hover:text-green-300 transition-colors">Features</a>
                 <a href="#comparison" class="text-white hover:text-green-300 transition-colors">Compare</a>
+                <a href="#future" class="text-white hover:text-green-300 transition-colors">Future AI</a>
                 <a href="{% url 'account_login' %}" class="text-white hover:text-green-300 transition-colors">Sign In</a>
                 <a href="{% url 'account_signup' %}" class="bg-white text-green-600 font-semibold py-2 px-5 rounded-full hover:bg-slate-200 transition-colors">
                     Sign Up
@@ -87,13 +82,13 @@
             <div class="md:col-span-1">
                 <div class="flex flex-col space-y-2" id="features-tabs-buttons">
                     <button data-tab="tab-1" class="tab-button active-tab">
-                        <i class="fas fa-barcode mr-3 w-5 text-center"></i> Smart Scanning
+                        <i class="fas fa-barcode mr-3 w-5 text-center"></i> Smart Scanning & Pricing
                     </button>
                     <button data-tab="tab-2" class="tab-button">
-                        <i class="fas fa-triangle-exclamation mr-3 w-5 text-center"></i> Alert Monitor
+                        <i class="fas fa-triangle-exclamation mr-3 w-5 text-center"></i> Expiry Alert Monitor
                     </button>
                     <button data-tab="tab-3" class="tab-button">
-                        <i class="fas fa-cogs mr-3 w-5 text-center"></i> Dynamic Pricing Engine
+                        <i class="fas fa-tag mr-3 w-5 text-center"></i> Smart Markdowns & Sales
                     </button>
                     <button data-tab="tab-4" class="tab-button">
                         <i class="fas fa-chart-line mr-3 w-5 text-center"></i> Sales vs. Waste Analytics
@@ -114,7 +109,7 @@
                                 <span class="text-blue-600 font-semibold uppercase">Scan & Price</span>
                                 <h3 class="text-3xl font-bold text-gray-800 mt-2">Intelligent Data Entry</h3>
                                 <p class="text-gray-600 text-lg mt-4">
-                                    Stop wasting time with manual data entry. Use any smartphone to scan product barcodes. GoScan instantly fetches product info and **auto-fills the price** from your supermarket's central `ProductPrice` table. Add an expiry date and rack, and you're done.
+                                    Stop wasting time. Use any smartphone to scan product barcodes. GoScan instantly fetches product info and **auto-fills the price** from your central `ProductPrice` table. Add an expiry date, manufacture date, and rack location in seconds.
                                 </p>
                             </div>
                             <img src="https://placehold.co/500x400/e2e8f0/334155?text=Smart+Scanning+UI" alt="Smart Scanning" class="rounded-lg shadow-md w-full object-cover">
@@ -125,35 +120,35 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                             <div>
                                 <span class="text-orange-600 font-semibold uppercase">Monitor & Act</span>
-                                <h3 class="text-3xl font-bold text-gray-800 mt-2">The Expiry Alert Dashboard</h3>
+                                <h3 class="text-3xl font-bold text-gray-800 mt-2">Expiry Alert Dashboard</h3>
                                 <p class="text-gray-600 text-lg mt-4">
-                                    Your central hub for action. The Alert Monitor automatically sorts all urgent items into "Expired," "Expires Today," and "Expires Soon." This isn't just a list; it's your daily action plan to prevent waste before it happens.
+                                    Your central hub for action. The **Alert Monitor** is your "Date Check" tool, automatically sorting all urgent items into "Expired," "Expires Today," and "Expires Soon" columns. This isn't just a list; it's your daily action plan to prevent waste.
                                 </p>
                             </div>
                             <img src="https://placehold.co/500x400/e2e8f0/334155?text=Alert+Monitor+UI" alt="Alert Monitor" class="rounded-lg shadow-md w-full object-cover">
                         </div>
                     </div>
-                    <!-- Tab 3: Dynamic Pricing -->
+                    <!-- Tab 3: Smart Markdowns -->
                     <div id="tab-3" class="tab-pane hidden">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                             <div>
-                                <span class="text-green-600 font-semibold uppercase">Optimize</span>
-                                <h3 class="text-3xl font-bold text-gray-800 mt-2">Automated Pricing Rules</h3>
+                                <span class="text-green-600 font-semibold uppercase">Optimize & Sell</span>
+                                <h3 class="text-3xl font-bold text-gray-800 mt-2">Smart Markdowns & Sales</h3>
                                 <p class="text-gray-600 text-lg mt-4">
-                                    Create powerful, custom rules to manage your pricing strategy. Automatically apply a "30% Expiry Discount" to items with 7 days left, or set rules to "Match Lowest Competitor" based on scraped data. You set the strategy, GoScan helps you execute it.
+                                    Don't just throw it away, sell it. The "Sell / Manage" modal lets you sell **partial quantities**, select a specific discount rule, or apply a custom price. You can even generate and print **colorful, on-demand price tickets** for discounted items to attract customers.
                                 </p>
                             </div>
-                            <img src="https://placehold.co/500x400/e2e8f0/334155?text=Pricing+Rule+Engine" alt="Pricing Engine" class="rounded-lg shadow-md w-full object-cover">
+                            <img src="https://placehold.co/500x400/e2e8f0/334155?text=Sell+Modal+&+Price+Ticket" alt="Smart Markdowns" class="rounded-lg shadow-md w-full object-cover">
                         </div>
                     </div>
-                    <!-- Tab 4: Sales vs. Waste Analytics -->
+                    <!-- Tab 4: Analytics -->
                     <div id="tab-4" class="tab-pane hidden">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                             <div>
                                 <span class="text-red-600 font-semibold uppercase">Analyze & Learn</span>
                                 <h3 class="text-3xl font-bold text-gray-800 mt-2">Log Every Outcome</h3>
                                 <p class="text-gray-600 text-lg mt-4">
-                                    This is our key innovation. When an item is removed, you log it as either **Wastage (a loss)** or a **Discounted Sale (a win)**. Our data-analysis-ready models (`DiscountedSale` & `WastageRecord`) store this, so you can *finally* measure the true financial impact of your marketing strategies.
+                                    This is our key innovation. When an item is removed, you log it as **Wastage**, **Internal Use (Grind Log)**, or a **Discounted Sale**. Our data-analysis-ready models (`WastageRecord` & `DiscountedSale`) store this, so you can *finally* measure the true financial impact of your strategies.
                                 </p>
                             </div>
                             <img src="https://placehold.co/500x400/e2e8f0/334155?text=Sales+vs+Wastage+Chart" alt="Analytics" class="rounded-lg shadow-md w-full object-cover">
@@ -166,7 +161,7 @@
                                 <span class="text-purple-600 font-semibold uppercase">Promote</span>
                                 <h3 class="text-3xl font-bold text-gray-800 mt-2">Live In-Store Displays</h3>
                                 <p class="text-gray-600 text-lg mt-4">
-                                    Why show generic ads? GoScan provides a live API endpoint (`display_content_api`) that feeds your in-store TV screens with active promotions. When you launch a "Flash Sale" on yogurts, it appears on the display *instantly*.
+                                    Why show generic ads? GoScan provides a live API endpoint (`display_content_api`) that feeds your in-store TV screens with active promotions and competitor price comparisons. When you launch a "Flash Sale," it appears on the display *instantly*.
                                 </p>
                             </div>
                             <img src="https://placehold.co/500x400/e2e8f0/334155?text=In-Store+Digital+Display" alt="In-Store Display" class="rounded-lg shadow-md w-full object-cover">
@@ -178,8 +173,37 @@
     </div>
 </section>
 
-<!-- Comparison Section (Unchanged) -->
-<section id="comparison" class="py-20 bg-white">
+<!-- ✅ NEW: Future AI Features Section -->
+<section id="future" class="py-20 bg-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <span class="text-blue-600 font-semibold uppercase">The Future of GoScan</span>
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mt-2">AI-Driven Automation</h2>
+            <p class="mt-4 text-lg text-gray-600">Our platform is built to learn. The data you log today powers the AI of tomorrow.</p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- AI Price Suggestions -->
+            <div class="bg-white p-8 rounded-lg shadow-lg border border-gray-100">
+                <div class="bg-blue-100 text-blue-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6"><i class="fas fa-brain fa-2x"></i></div>
+                <h3 class="text-2xl font-bold mb-2 text-center">AI Price Suggestions</h3>
+                <p class="text-gray-600 text-center">
+                    By analyzing your `DiscountedSale` history, our future AI module will move beyond fixed rules. It will suggest the **optimal markdown price** (e.g., "28% off" not "30% off") to maximize the probability of a sale while minimizing your loss of margin.
+                </p>
+            </div>
+            <!-- AI Shelf Management -->
+            <div class="bg-white p-8 rounded-lg shadow-lg border border-gray-100">
+                <div class="bg-blue-100 text-blue-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6"><i class="fas fa-cubes fa-2x"></i></div>
+                <h3 class="text-2xl font-bold mb-2 text-center">AI Shelf Management</h3>
+                <p class="text-gray-600 text-center">
+                    Our `Rack` model lays the groundwork for true automated shelf management. By integrating AI and computer vision, the system will be able to analyze shelf photos to automatically flag incorrect product placement or stock levels based on product size and shape.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ✅ UPDATED: Comparison Section (from your analysis) -->
+<section id="comparison" class="py-20 bg-slate-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-16">
             <h2 class="text-3xl md:text-4xl font-bold text-gray-800">The GoScan Difference</h2>
@@ -188,66 +212,66 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
             <!-- Competitor 1: B2C Apps -->
-            <div class="border border-gray-200 rounded-lg p-8">
+            <div class="border border-gray-200 rounded-lg p-8 bg-white">
                 <h3 class="text-2xl font-bold text-center text-gray-800 mb-6">B2C Surplus Apps</h3>
                 <p class="text-gray-600 mb-6">Platforms like <strong>Too Good To Go</strong> and <strong>Phenix</strong> are excellent at connecting customers to surplus food. However, they are B2C marketplaces, not internal management tools.</p>
                 <ul class="space-y-3">
                     <li class="flex items-start text-gray-500">
                         <i class="fas fa-times-circle text-red-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        No granular, real-time inventory tracking
+                        No granular, real-time inventory tracking.
                     </li>
                     <li class="flex items-start text-gray-500">
                         <i class="fas fa-times-circle text-red-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        No internal pricing or rule management
+                        No internal pricing or rule management.
                     </li>
                     <li class="flex items-start text-gray-500">
                         <i class="fas fa-times-circle text-red-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Doesn't help manage stock *before* it becomes surplus
+                        Doesn't help manage stock *before* it becomes surplus.
                     </li>
                 </ul>
             </div>
 
             <!-- Our Solution: GoScan -->
-            <div class="border-2 border-green-500 rounded-lg p-8 shadow-2xl relative">
+            <div class="border-2 border-green-500 rounded-lg p-8 shadow-2xl relative bg-white">
                 <span class="absolute top-0 -translate-y-1/2 left-1/2 -translate-x-1/2 bg-green-500 text-white text-sm font-bold px-4 py-1 rounded-full uppercase">GoScan</span>
                 <h3 class="text-2xl font-bold text-center text-gray-800 mb-6">The Intelligent Hub</h3>
                 <p class="text-gray-600 mb-6">GoScan is the <strong>B2B software-first solution</strong> that acts as your store's brain. It's built for managers and staff to make decisions.</p>
                 <ul class="space-y-3">
                     <li class="flex items-start text-gray-700">
                         <i class="fas fa-check-circle text-green-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Tracks every batch's expiry date and location
+                        Tracks every batch's expiry date and location.
                     </li>
                     <li class="flex items-start text-gray-700">
                         <i class="fas fa-check-circle text-green-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Lets you apply dynamic pricing rules & promotions
+                        Lets you apply dynamic pricing rules & promotions.
                     </li>
                     <li class="flex items-start text-gray-700">
                         <i class="fas fa-check-circle text-green-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        **Logs sales vs. wastage** for powerful data analysis
+                        **Logs sales vs. wastage** for powerful data analysis.
                     </li>
                     <li class="flex items-start text-gray-700">
                         <i class="fas fa-check-circle text-green-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Powers your *own* in-store marketing displays via API
+                        Powers your *own* in-store marketing displays via API.
                     </li>
                 </ul>
             </div>
 
             <!-- Competitor 2: Hardware Systems -->
-            <div class="border border-gray-200 rounded-lg p-8">
+            <div class="border border-gray-200 rounded-lg p-8 bg-white">
                 <h3 class="text-2xl font-bold text-center text-gray-800 mb-6">Hardware-First Systems</h3>
                 <p class="text-gray-600 mb-6">Companies like <strong>Wasteless</strong> or <strong>SES-imagotag</strong> provide automated solutions using expensive Electronic Shelf Labels (ESLs) on every product.</p>
                 <ul class="space-y-3">
                     <li class="flex items-start text-gray-500">
                         <i class="fas fa-times-circle text-red-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Extremely high hardware & maintenance cost
+                        Extremely high hardware & maintenance cost.
                     </li>
                     <li class="flex items-start text-gray-500">
                         <i class="fas fa-times-circle text-red-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Inflexible and proprietary systems
+                        Inflexible and proprietary systems.
                     </li>
                     <li class="flex items-start text-gray-500">
                         <i class="fas fa-times-circle text-red-500 w-5 mr-3 mt-1 flex-shrink-0"></i>
-                        Requires major store-wide installation
+                        Requires major store-wide installation.
                     </li>
                 </ul>
             </div>
@@ -256,24 +280,24 @@
 </section>
 
 <!-- Testimonials Section (Unchanged) -->
-<section id="testimonials" class="bg-slate-100 py-20">
+<section id="testimonials" class="bg-white py-20">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-16">
             <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Built for Retail, Trusted by Managers</h2>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div class="bg-white p-8 rounded-lg shadow-lg">
+            <div class="bg-slate-100 p-8 rounded-lg shadow-lg">
                 <p class="text-gray-600 mb-6">"GoScan has transformed our approach to waste management. The 'Alert Monitor' is a game-changer, saving us thousands of euros each month."</p>
                 <div class="font-bold">- Sophie Dubois</div>
                 <div class="text-sm text-gray-500">Manager, Franprix Domont</div>
             </div>
-            <div class="bg-white p-8 rounded-lg shadow-lg">
+            <div class="bg-slate-100 p-8 rounded-lg shadow-lg">
                 <p class="text-gray-600 mb-6">"The 'Price Table' feature is incredibly smart. We set our prices once, and the mobile scanner auto-fills it for my staff. It's cut our data entry time in half."</p>
                 <div class="font-bold">- Jean-Luc Martin</div>
                 <div class="text-sm text-gray-500">Owner, Carrefour City</div>
             </div>
-            <div class="bg-white p-8 rounded-lg shadow-lg">
-                <p class="text-gray-600 mb-6">"Finally, I can see what was *sold* versus what was *wasted*. The data from the 'DiscountedSale' and 'WastageRecord' tables is the most valuable part for my analysis."</sppan></p>
+            <div class="bg-slate-100 p-8 rounded-lg shadow-lg">
+                <p class="text-gray-600 mb-6">"Finally, I can see what was *sold* versus what was *wasted*. The data from the 'DiscountedSale' and 'WastageRecord' tables is the most valuable part for my analysis."</p>
                 <div class="font-bold">- Isabelle Petit</div>
                 <div class="text-sm text-gray-500">Data Analyst, E.Leclerc</div>
             </div>
@@ -282,7 +306,7 @@
 </section>
 
 <!-- Final CTA Section (Unchanged) -->
-<section class="bg-white py-20">
+<section class="bg-slate-100 py-20">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Ready to Take Control of Your Inventory?</h2>
         <p class="mt-4 text-lg text-gray-600">Stop wasting products and start saving money today. Create your account and see the difference.</p>
@@ -347,7 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // --- ✅ NEW: Style for vertical tabs ---
+    // --- Style for vertical tabs ---
     const style = document.createElement('style');
     style.innerHTML = `
         .tab-button {
@@ -358,6 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
             border-radius: 0.5rem; /* rounded-lg */
             width: 100%;
             text-align: left;
+            font-weight: 500;
         }
         .tab-button:hover {
             background-color: #f3f4f6; /* bg-gray-100 */
@@ -368,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
             border-color: #2563eb; /* border-blue-600 */
             background-color: #eff6ff; /* bg-blue-50 */
             color: #1d4ed8; /* text-blue-700 */
-            font-weight: 600;
+            font-weight: 700;
         }
         .tab-pane.active-pane {
             animation: fadeIn 0.5s ease-in-out;
