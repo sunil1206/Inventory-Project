@@ -6,7 +6,7 @@
     <p>Your '{{ subscription.get_plan_display }}' plan ended on {{ subscription.end_date|date:"F d, Y" }}.</p>
     <p>Please renew your subscription to regain access to all Pro features.</p>
 
-    <a href="{% url 'payment_success' %}" class="btn btn-primary">
+    <a href="{% url 'users:payment_success' %}" class="btn btn-primary">
         Renew for $50/month
     </a>
 
