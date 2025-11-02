@@ -251,14 +251,14 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from .models import Supermarket, StaffProfile, Supplier, Rack, ProductPrice
-from .forms import RackForm  # ✅ Import the new form
+
 
 User = get_user_model()
 
 
 # Import your models and forms
 
-from .forms import RackForm
+
 
 @login_required(login_url='account_login')
 def rack_list_create_view(request, supermarket_id):
@@ -421,6 +421,7 @@ def add_inventory_from_product_list(request, supermarket_id, product_barcode):
             manufacture_date=form_manufacture_date,
             defaults={'quantity': form_quantity}  # Only set quantity if new
         )
+
 
         if not created:
             # If the batch already exists, just add the quantity
@@ -933,9 +934,13 @@ logger = logging.getLogger(__name__)
 
 # ... other views ...
 
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def scan_api(request):
+    """
+    Handles all core scanning, manual lookup, and inventory modification actions.
+    """
     mode = request.data.get('mode')
     supermarket_id = request.data.get('supermarket_id')
     if not all([mode, supermarket_id]):
@@ -948,148 +953,292 @@ def scan_api(request):
         if not barcode:
             return Response({'error': 'Barcode required.'}, status=400)
 
-        try:  # Add outer try block for general safety
-            product, created = Product.objects.get_or_create(barcode=barcode)
+        try:
+            product, created = Product.objects.get_or_create(barcode=barcode, defaults={'name': f'Product {barcode}'})
 
-            # --- ✅ START: Robust Scraping ---
-            if created or not product.name:
+            # --- ✅ Scrape new fields ---
+            if (created or not product.name or product.name.startswith("Product ")) and not product.cover_image:
                 try:
-                    logger.info(f"Attempting to scrape info for new/incomplete product: {barcode}")
-                    product_info = get_product_info_cascade(barcode)  # Your scraping function
+                    product_info = get_product_info_cascade(barcode)
                     if product_info and product_info.get('name'):
-                        product.name = product_info.get('name', f"Product {barcode}")  # Default name if needed
+                        product.name = product_info.get('name')
                         product.brand = product_info.get('brand')
                         product.image_url = product_info.get('image_url')
-                        # Add description if your scraper provides it
-                        # product.description = product_info.get('description')
+                        product.quantity = product_info.get('quantity')  # Scrape package size
+                        product.nutriscore_grade = product_info.get('nutriscore_grade')  # Scrape Nutri-Score
                         product.save()
-                        logger.info(f"Successfully scraped and saved info for {barcode}")
-                    else:
-                        logger.warning(f"Scraping yielded no useful info for {barcode}")
-                        # Optionally set a default name if created and scraping failed
-                        if created and not product.name:
-                            product.name = f"Product {barcode}"
-                            product.save()
                 except Exception as e:
-                    # Log the error but don't crash the API response
-                    logger.error(f"Error during scraping for barcode {barcode}: {e}", exc_info=True)
-                    # Ensure a default name if needed
-                    if created and not product.name:
-                        product.name = f"Product {barcode}"
-                        product.save()
-            # --- ✅ END: Robust Scraping ---
+                    logger.warning(f"Scraping failed for {barcode}: {e}")
 
             existing_items = InventoryItem.objects.filter(supermarket=supermarket, product=product).select_related(
-                'rack').order_by('expiry_date')  # Select related rack
-
+                'rack').order_by('expiry_date')
             categories = list(Category.objects.values('id', 'name'))
 
+            # --- ✅ AUTO-FETCH ALL DEFAULTS ---
             default_price = None
+            default_category_id = product.category_id  # Fallback to product's category
+            default_rack_id = None
             try:
-                # Find the default price for this product at this specific supermarket
-                product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
-                default_price = product_price_entry.price
+                defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+                default_price = defaults_entry.price
+                if defaults_entry.default_category_id:
+                    default_category_id = defaults_entry.default_category_id
+                if defaults_entry.default_rack_id:
+                    default_rack_id = defaults_entry.default_rack_id
             except ProductPrice.DoesNotExist:
-                pass  # No default price has been set, so it remains None
+                pass
 
             return Response({
                 'product': {
-                    'barcode': product.barcode,
-                    'name': product.name,
-                    'brand': product.brand,
+                    'barcode': product.barcode, 'name': product.name, 'brand': product.brand,
                     'image_url': product.display_image_url,
-                    'category_id': product.category_id,
-                    'default_store_price':default_price,
+                    'default_store_price': default_price,
+                    'category_id': default_category_id,  # Send the smart default
+                    'default_rack_id': default_rack_id,  # Send the smart default
                 },
                 'existing_items': [
-                    {
-                        'id': item.id,
-                        'quantity': item.quantity,
-                        'expiry_date': item.expiry_date,
-                        'rack_id': item.rack_id,  # Return rack ID
-                        'rack_name': item.rack.name if item.rack else None,  # Return rack name
-                        'store_price': item.store_price
-                    } for item in existing_items
-                ],
+                    {'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date, 'rack_id': item.rack_id,
+                     'rack_name': item.rack.name if item.rack else None, 'store_price': item.store_price} for item in
+                    existing_items],
                 'categories': categories
             })
-
         except Exception as e:
-            # Catch any other unexpected errors and return JSON
-            logger.error(f"Unexpected error in scan_api lookup for barcode {barcode}: {e}", exc_info=True)
-            return Response({'error': 'An internal server error occurred during lookup.'}, status=500)
-
+            logger.error(f"Error in scan_api lookup: {e}", exc_info=True)
+            return Response({'error': 'An internal server error occurred.'}, status=500)
 
     elif mode == 'add':
         data = request.data
-        try:  # Add outer try block
+        try:
             product = get_object_or_404(Product, barcode=data.get('barcode'))
 
-            category_id = data.get('category_id') or None
-            store_price = data.get('store_price') or None
-            rack_id = data.get('rack_id') or None  # Use rack_id
-            manufacture_date = data.get('manufacture_date') or None
-            quantity_to_add = int(data.get('quantity', 1))
+            # --- 1. Get explicit choices from the form ---
+            form_category_id = data.get('category_id') or None
+            form_rack_id = data.get('rack_id') or None
+            form_price_str = data.get('store_price')
+            form_store_price = form_price_str if form_price_str and form_price_str.strip() else None
+            form_manufacture_date = data.get('manufacture_date') or None
+            form_expiry_date = data.get('expiry_date')
+            form_quantity = int(data.get('quantity', 1))
 
-            # If no price was entered manually, try to find the default price
-            if store_price is None:
-                try:
-                    product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
-                    store_price = product_price_entry.price
-                except ProductPrice.DoesNotExist:
-                    store_price = None
+            if not form_expiry_date:
+                return Response({'error': 'Expiry date is required.'}, status=400)
 
-                    # Use get_or_create with rack_id
+            # --- 2. Initialize final values ---
+            final_category_id = form_category_id
+            final_rack_id = form_rack_id
+            final_store_price = form_store_price
+
+            # --- 3. AUTO-FETCH DEFAULTS ---
+            try:
+                defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+                if final_store_price is None:
+                    final_store_price = defaults_entry.price
+                if final_category_id is None:
+                    final_category_id = defaults_entry.default_category_id
+                if final_rack_id is None:
+                    final_rack_id = defaults_entry.default_rack_id
+            except ProductPrice.DoesNotExist:
+                pass  # No defaults, just use form values
+
+            # --- 4. Fallback for Category ---
+            if final_category_id is None and product.category_id:
+                final_category_id = product.category_id
+
+            # --- 5. Create or Update Logic ---
             item, created = InventoryItem.objects.get_or_create(
                 supermarket=supermarket,
                 product=product,
-                expiry_date=data.get('expiry_date'),
-                rack_id=rack_id,  # Use rack_id
-                store_price=store_price,
-                # Consider adding manufacture_date here if it should be part of uniqueness
-                # manufacture_date=manufacture_date,
-                defaults={
-                    'quantity': quantity_to_add,
-                    'category_id': category_id,
-                    'manufacture_date': manufacture_date
-                }
+                expiry_date=form_expiry_date,
+                store_price=final_store_price,
+                rack_id=final_rack_id,
+                category_id=final_category_id,
+                manufacture_date=form_manufacture_date,
+                defaults={'quantity': form_quantity}
             )
-
             if not created:
-                item.quantity = F('quantity') + quantity_to_add
+                item.quantity = F('quantity') + form_quantity
                 item.save()
-                # Use request._request.session for messages in DRF/API views if needed
-                # messages.success(request._request, f"Added {quantity_to_add} more...")
-                logger.info(f"Updated quantity for existing batch of {product.name} (Barcode: {product.barcode})")
-                return Response({'message': f'Updated quantity for existing batch of {product.name}.'}, status=200)
+                return Response({'message': 'Updated quantity for existing batch.'}, status=200)
             else:
-                # messages.success(request._request, f"New batch...")
-                logger.info(f"Created new batch for {product.name} (Barcode: {product.barcode})")
                 return Response({'message': f'New batch of {product.name} added.'}, status=201)
 
         except IntegrityError:
-            logger.warning(f"IntegrityError: Attempted to add duplicate batch for barcode {data.get('barcode')}")
-            return Response(
-                {'error': 'A batch with these exact details (Product, Expiry, Rack, Price) already exists.'},
-                status=400)
+            return Response({'error': 'A batch with these exact details already exists.'}, status=400)
         except Exception as e:
-            logger.error(f"Error in scan_api add mode for barcode {data.get('barcode')}: {e}", exc_info=True)
+            logger.error(f"Error in scan_api add mode: {e}", exc_info=True)
             return Response({'error': f'An error occurred: {e}'}, status=400)
 
-
     elif mode == 'remove':
-        try:  # Add try block
+        try:
             item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
-            product_name = item.product.name
             item.delete()
-            logger.info(f"Removed inventory batch ID {request.data.get('inventory_item_id')} ({product_name})")
             return Response({'message': 'Batch removed.'})
         except Exception as e:
-            logger.error(f"Error removing inventory item ID {request.data.get('inventory_item_id')}: {e}",
-                         exc_info=True)
+            logger.error(f"Error removing item: {e}", exc_info=True)
             return Response({'error': 'Failed to remove item.'}, status=500)
 
     return Response({'error': 'Invalid mode.'}, status=400)
+
+
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+# def scan_api(request):
+#     mode = request.data.get('mode')
+#     supermarket_id = request.data.get('supermarket_id')
+#     if not all([mode, supermarket_id]):
+#         return Response({'error': 'Mode and supermarket_id required.'}, status=400)
+#
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#
+#     if mode == 'lookup':
+#         barcode = request.data.get('barcode')
+#         if not barcode:
+#             return Response({'error': 'Barcode required.'}, status=400)
+#
+#         try:  # Add outer try block for general safety
+#             product, created = Product.objects.get_or_create(barcode=barcode)
+#
+#             # --- ✅ START: Robust Scraping ---
+#             if created or not product.name:
+#                 try:
+#                     logger.info(f"Attempting to scrape info for new/incomplete product: {barcode}")
+#                     product_info = get_product_info_cascade(barcode)  # Your scraping function
+#                     if product_info and product_info.get('name'):
+#                         product.name = product_info.get('name', f"Product {barcode}")  # Default name if needed
+#                         product.brand = product_info.get('brand')
+#                         product.image_url = product_info.get('image_url')
+#                         product.quantity = product_info.get('quantity')  # Scrape package size
+#                         product.nutriscore_grade = product_info.get('nutriscore_grade')  # Scrape Nutri-Score
+#                         # Add description if your scraper provides it
+#                         # product.description = product_info.get('description')
+#                         product.save()
+#                         logger.info(f"Successfully scraped and saved info for {barcode}")
+#                     else:
+#                         logger.warning(f"Scraping yielded no useful info for {barcode}")
+#                         # Optionally set a default name if created and scraping failed
+#                         if created and not product.name:
+#                             product.name = f"Product {barcode}"
+#                             product.save()
+#                 except Exception as e:
+#                     # Log the error but don't crash the API response
+#                     logger.error(f"Error during scraping for barcode {barcode}: {e}", exc_info=True)
+#                     # Ensure a default name if needed
+#                     if created and not product.name:
+#                         product.name = f"Product {barcode}"
+#                         product.save()
+#             # --- ✅ END: Robust Scraping ---
+#
+#             existing_items = InventoryItem.objects.filter(supermarket=supermarket, product=product).select_related(
+#                 'rack').order_by('expiry_date')  # Select related rack
+#
+#             categories = list(Category.objects.values('id', 'name'))
+#
+#             default_price = None
+#             try:
+#                 # Find the default price for this product at this specific supermarket
+#                 product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+#                 default_price = product_price_entry.price
+#             except ProductPrice.DoesNotExist:
+#                 pass  # No default price has been set, so it remains None
+#
+#             return Response({
+#                 'product': {
+#                     'barcode': product.barcode,
+#                     'name': product.name,
+#                     'brand': product.brand,
+#                     'image_url': product.display_image_url,
+#                     'category_id': product.category_id,
+#                     'default_store_price':default_price,
+#                 },
+#                 'existing_items': [
+#                     {
+#                         'id': item.id,
+#                         'quantity': item.quantity,
+#                         'expiry_date': item.expiry_date,
+#                         'rack_id': item.rack_id,  # Return rack ID
+#                         'rack_name': item.rack.name if item.rack else None,  # Return rack name
+#                         'store_price': item.store_price
+#                     } for item in existing_items
+#                 ],
+#                 'categories': categories
+#             })
+#
+#         except Exception as e:
+#             # Catch any other unexpected errors and return JSON
+#             logger.error(f"Unexpected error in scan_api lookup for barcode {barcode}: {e}", exc_info=True)
+#             return Response({'error': 'An internal server error occurred during lookup.'}, status=500)
+#
+#
+#     elif mode == 'add':
+#         data = request.data
+#         try:  # Add outer try block
+#             product = get_object_or_404(Product, barcode=data.get('barcode'))
+#
+#             category_id = data.get('category_id') or None
+#             store_price = data.get('store_price') or None
+#             rack_id = data.get('rack_id') or None  # Use rack_id
+#             manufacture_date = data.get('manufacture_date') or None
+#             quantity_to_add = int(data.get('quantity', 1))
+#
+#             # If no price was entered manually, try to find the default price
+#             if store_price is None:
+#                 try:
+#                     product_price_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+#                     store_price = product_price_entry.price
+#                 except ProductPrice.DoesNotExist:
+#                     store_price = None
+#
+#                     # Use get_or_create with rack_id
+#             item, created = InventoryItem.objects.get_or_create(
+#                 supermarket=supermarket,
+#                 product=product,
+#                 expiry_date=data.get('expiry_date'),
+#                 rack_id=rack_id,  # Use rack_id
+#                 store_price=store_price,
+#                 # Consider adding manufacture_date here if it should be part of uniqueness
+#                 # manufacture_date=manufacture_date,
+#                 defaults={
+#                     'quantity': quantity_to_add,
+#                     'category_id': category_id,
+#                     'manufacture_date': manufacture_date
+#                 }
+#             )
+#
+#             if not created:
+#                 item.quantity = F('quantity') + quantity_to_add
+#                 item.save()
+#                 # Use request._request.session for messages in DRF/API views if needed
+#                 # messages.success(request._request, f"Added {quantity_to_add} more...")
+#                 logger.info(f"Updated quantity for existing batch of {product.name} (Barcode: {product.barcode})")
+#                 return Response({'message': f'Updated quantity for existing batch of {product.name}.'}, status=200)
+#             else:
+#                 # messages.success(request._request, f"New batch...")
+#                 logger.info(f"Created new batch for {product.name} (Barcode: {product.barcode})")
+#                 return Response({'message': f'New batch of {product.name} added.'}, status=201)
+#
+#         except IntegrityError:
+#             logger.warning(f"IntegrityError: Attempted to add duplicate batch for barcode {data.get('barcode')}")
+#             return Response(
+#                 {'error': 'A batch with these exact details (Product, Expiry, Rack, Price) already exists.'},
+#                 status=400)
+#         except Exception as e:
+#             logger.error(f"Error in scan_api add mode for barcode {data.get('barcode')}: {e}", exc_info=True)
+#             return Response({'error': f'An error occurred: {e}'}, status=400)
+#
+#
+#     elif mode == 'remove':
+#         try:  # Add try block
+#             item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
+#             product_name = item.product.name
+#             item.delete()
+#             logger.info(f"Removed inventory batch ID {request.data.get('inventory_item_id')} ({product_name})")
+#             return Response({'message': 'Batch removed.'})
+#         except Exception as e:
+#             logger.error(f"Error removing inventory item ID {request.data.get('inventory_item_id')}: {e}",
+#                          exc_info=True)
+#             return Response({'error': 'Failed to remove item.'}, status=500)
+#
+#     return Response({'error': 'Invalid mode.'}, status=400)
 
 # ... (rest of your views.py) ...
 
