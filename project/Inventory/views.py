@@ -548,7 +548,7 @@ def create_product_view(request, supermarket_id):
     return render(request, 'inventory/product_form.html', context)
 
 
-from .forms import ProductForm  # Import the new form
+from .forms import ProductForm, RackForm  # Import the new form
 
 
 @login_required
