@@ -61,6 +61,7 @@ urlpatterns = [
     path('api/supermarket/<int:supermarket_id>/urgent-items/', views.urgent_items_api, name='urgent_items_api'),
 
     path('supermarket/<int:supermarket_id>/scan/', views.scan_item_page_view, name='scan_item'),
+path('supermarket/<int:supermarket_id>/scan-redirect/', views.scan_redirect_view, name='scan_redirect'),
     path('supermarket/<int:supermarket_id>/inventory/', views.inventory_list_view, name='inventory_list'),
     # path('supermarket/<int:supermarket_id>/alerts/', views.alert_monitor_view, name='alert_monitor'),
     path('supermarket/<int:supermarket_id>/pricing/', views.competitive_price_view, name='competitive_pricing'),
@@ -74,6 +75,11 @@ urlpatterns = [
     # Product Catalog & CRUD
     path('products/<int:supermarket_id>/', views.product_list_view, name='product_list'),
     path('products/<int:supermarket_id>/new/', views.create_product_view, name='create_product'),
+# path('supermarket/<int:supermarket_id>/product/create/<str:barcode>/', views.create_product_view, name='create_product'),
+    # This URL accepts '0' or a real barcode, matching your template's `{% url ... '0' %}` tag
+    path('supermarket/<int:supermarket_id>/product/create/<str:barcode>/', views.create_product_view,
+         name='create_product'),
+
     path('products/<int:supermarket_id>/<str:product_barcode>/', views.product_detail_view, name='product_detail'),
     path('products/<int:supermarket_id>/<str:product_barcode>/edit/', views.edit_product_view, name='edit_product'),
     path('products/<int:supermarket_id>/<str:product_barcode>/delete/', views.delete_product_view, name='delete_product'),

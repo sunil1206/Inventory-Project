@@ -45,7 +45,6 @@ from django.core.paginator import Paginator
 
 import decimal
 
-
 # This is the single view that handles everything
 @login_required(login_url='account_login')
 def manage_product_prices_view(request, supermarket_id):
@@ -54,8 +53,6 @@ def manage_product_prices_view(request, supermarket_id):
     categories, and racks from a single page.
     """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
-
-    # Fetch all racks for this supermarket (for forms and filters)
     racks = Rack.objects.filter(supermarket=supermarket)
     categories = Category.objects.all()
 
@@ -63,36 +60,39 @@ def manage_product_prices_view(request, supermarket_id):
     if request.method == 'POST':
         product_barcode = request.POST.get('product_id')
         price_str = request.POST.get('price', '').strip()
-        category_id = request.POST.get('category_id') or None  # Handle "" as None
-        rack_id = request.POST.get('rack_id') or None  # Handle "" as None
+        category_id = request.POST.get('category_id') or None
+        rack_id = request.POST.get('rack_id') or None
 
         if not product_barcode:
             messages.error(request, "Invalid product.")
-            # Redirect back to the page you were on, with filters
             return redirect(request.META.get('HTTP_REFERER', 'product_pricing:product_price_list'))
 
         product = get_object_or_404(Product, pk=product_barcode)
 
         try:
-            # Get the defaults object or create it
-            obj, created = ProductPrice.objects.get_or_create(
-                supermarket=supermarket,
-                product=product
-            )
-
-            # Update fields from the form
-            obj.default_category_id = category_id
-            obj.default_rack_id = rack_id
-
+            # Prepare the new price value
             new_price = None
             if price_str:
                 new_price = decimal.Decimal(price_str)
-                obj.price = new_price
-            else:
-                obj.price = None  # Clear the price if the field was empty
 
-            obj.save()
-            messages.success(request, f"Defaults for {product.name} updated.")
+            # --- THIS IS THE FIX ---
+            # Use update_or_create to safely find or create the object
+            # and update its values in a single, atomic database transaction.
+            obj, created = ProductPrice.objects.update_or_create(
+                supermarket=supermarket,
+                product=product,
+                defaults={
+                    'price': new_price,
+                    'default_category_id': category_id,
+                    'default_rack_id': rack_id
+                }
+            )
+            # --- END OF FIX ---
+
+            if created:
+                messages.success(request, f"Defaults for {product.name} created.")
+            else:
+                messages.success(request, f"Defaults for {product.name} updated.")
 
             # --- CASCADING UPDATE LOGIC ---
             if new_price is not None:
@@ -111,31 +111,20 @@ def manage_product_prices_view(request, supermarket_id):
         except Exception as e:
             messages.error(request, f"An error occurred: {e}")
 
-        # Redirect back to the same page, preserving filters
-        # And jump to the row you just edited
         query_params = request.GET.urlencode()
         redirect_url = f"{request.path}?{query_params}#product-row-{product.barcode}"
         return redirect(redirect_url)
 
     # --- GET Request (Read) Logic ---
-
-    # Subqueries to fetch all defaults in one go
-    price_subquery = ProductPrice.objects.filter(
-        product=OuterRef('pk'), supermarket=supermarket
-    ).values('price')[:1]
-
-    cat_name_subquery = ProductPrice.objects.filter(
-        product=OuterRef('pk'), supermarket=supermarket
-    ).values('default_category__name')[:1]  # Get name for display
-
-    rack_name_subquery = ProductPrice.objects.filter(
-        product=OuterRef('pk'), supermarket=supermarket
-    ).values('default_rack__name')[:1]  # Get name for display
+    # (Your GET logic appears correct and does not need changes)
+    price_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values('price')[:1]
+    cat_name_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values('default_category__name')[:1]
+    rack_name_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values('default_rack__name')[:1]
 
     product_list = Product.objects.annotate(
         current_price=Subquery(price_subquery, output_field=DecimalField()),
-        current_category=Subquery(cat_name_subquery),  # Your template uses this
-        current_rack=Subquery(rack_name_subquery)  # Your template uses this
+        current_category=Subquery(cat_name_subquery),
+        current_rack=Subquery(rack_name_subquery)
     ).order_by('name')
 
     # --- Filters ---
@@ -145,8 +134,7 @@ def manage_product_prices_view(request, supermarket_id):
     price_status = request.GET.get('price_status', '')
 
     if query:
-        product_list = product_list.filter(
-            Q(name__icontains=query) | Q(brand__icontains=query) | Q(barcode__icontains=query))
+        product_list = product_list.filter(Q(name__icontains=query) | Q(brand__icontains=query) | Q(barcode__icontains=query))
     if category_id:
         product_list = product_list.filter(price_listings__default_category__id=category_id)
     if rack_id:
@@ -171,6 +159,132 @@ def manage_product_prices_view(request, supermarket_id):
         'price_status_filter': price_status,
     }
     return render(request, 'pricing/manage_product_prices.html', context)
+
+# This is the single view that handles everything
+# @login_required(login_url='account_login')
+# def manage_product_prices_view(request, supermarket_id):
+#     """
+#     (CRUD) Handles setting, viewing, and updating default prices,
+#     categories, and racks from a single page.
+#     """
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#
+#     # Fetch all racks for this supermarket (for forms and filters)
+#     racks = Rack.objects.filter(supermarket=supermarket)
+#     categories = Category.objects.all()
+#
+#     # --- POST (Create/Update Price & Defaults) Logic ---
+#     if request.method == 'POST':
+#         product_barcode = request.POST.get('product_id')
+#         price_str = request.POST.get('price', '').strip()
+#         category_id = request.POST.get('category_id') or None  # Handle "" as None
+#         rack_id = request.POST.get('rack_id') or None  # Handle "" as None
+#
+#         if not product_barcode:
+#             messages.error(request, "Invalid product.")
+#             # Redirect back to the page you were on, with filters
+#             return redirect(request.META.get('HTTP_REFERER', 'product_pricing:product_price_list'))
+#
+#         product = get_object_or_404(Product, pk=product_barcode)
+#
+#         try:
+#             # Get the defaults object or create it
+#             obj, created = ProductPrice.objects.get_or_create(
+#                 supermarket=supermarket,
+#                 product=product
+#             )
+#
+#             # Update fields from the form
+#             obj.default_category_id = category_id
+#             obj.default_rack_id = rack_id
+#
+#             new_price = None
+#             if price_str:
+#                 new_price = decimal.Decimal(price_str)
+#                 obj.price = new_price
+#             else:
+#                 obj.price = None  # Clear the price if the field was empty
+#
+#             obj.save()
+#             messages.success(request, f"Defaults for {product.name} updated.")
+#
+#             # --- CASCADING UPDATE LOGIC ---
+#             if new_price is not None:
+#                 updated_count = InventoryItem.objects.filter(
+#                     supermarket=supermarket,
+#                     product=product,
+#                     promotion__isnull=True,
+#                     applied_rule__isnull=True
+#                 ).update(store_price=new_price)
+#
+#                 if updated_count > 0:
+#                     messages.info(request, f"Updated price for {updated_count} existing inventory batches.")
+#
+#         except (decimal.InvalidOperation, ValueError):
+#             messages.error(request, "Invalid price format.")
+#         except Exception as e:
+#             messages.error(request, f"An error occurred: {e}")
+#
+#         # Redirect back to the same page, preserving filters
+#         # And jump to the row you just edited
+#         query_params = request.GET.urlencode()
+#         redirect_url = f"{request.path}?{query_params}#product-row-{product.barcode}"
+#         return redirect(redirect_url)
+#
+#     # --- GET Request (Read) Logic ---
+#
+#     # Subqueries to fetch all defaults in one go
+#     price_subquery = ProductPrice.objects.filter(
+#         product=OuterRef('pk'), supermarket=supermarket
+#     ).values('price')[:1]
+#
+#     cat_name_subquery = ProductPrice.objects.filter(
+#         product=OuterRef('pk'), supermarket=supermarket
+#     ).values('default_category__name')[:1]  # Get name for display
+#
+#     rack_name_subquery = ProductPrice.objects.filter(
+#         product=OuterRef('pk'), supermarket=supermarket
+#     ).values('default_rack__name')[:1]  # Get name for display
+#
+#     product_list = Product.objects.annotate(
+#         current_price=Subquery(price_subquery, output_field=DecimalField()),
+#         current_category=Subquery(cat_name_subquery),  # Your template uses this
+#         current_rack=Subquery(rack_name_subquery)  # Your template uses this
+#     ).order_by('name')
+#
+#     # --- Filters ---
+#     query = request.GET.get('q', '')
+#     category_id = request.GET.get('category', '')
+#     rack_id = request.GET.get('rack', '')
+#     price_status = request.GET.get('price_status', '')
+#
+#     if query:
+#         product_list = product_list.filter(
+#             Q(name__icontains=query) | Q(brand__icontains=query) | Q(barcode__icontains=query))
+#     if category_id:
+#         product_list = product_list.filter(price_listings__default_category__id=category_id)
+#     if rack_id:
+#         product_list = product_list.filter(price_listings__default_rack__id=rack_id)
+#     if price_status == 'set':
+#         product_list = product_list.filter(current_price__isnull=False)
+#     elif price_status == 'unset':
+#         product_list = product_list.filter(current_price__isnull=True)
+#
+#     paginator = Paginator(product_list.distinct(), 30)
+#     page_number = request.GET.get('page')
+#     page_obj = paginator.get_page(page_number)
+#
+#     context = {
+#         'supermarket': supermarket,
+#         'page_obj': page_obj,
+#         'categories': categories,
+#         'racks': racks,
+#         'search_query': query,
+#         'category_filter': category_id,
+#         'rack_filter': rack_id,
+#         'price_status_filter': price_status,
+#     }
+#     return render(request, 'pricing/manage_product_prices.html', context)
 # ... (all your existing views like pricing_strategy_view, alert_monitor_view, etc.) ...
 
 

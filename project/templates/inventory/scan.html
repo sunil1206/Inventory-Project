@@ -1,17 +1,10 @@
 {% extends "inventory/base.html" %}
 
-{% block title %}Scan & Manage Inventory{% endblock %}
+{% block title %}Find Product{% endblock %}
+{% block header %}Find Product{% endblock %}
 
 {% block content %}
 <style>
-    /* Custom styles for a more dynamic feel */
-    .choice-card {
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    }
-    .choice-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    }
     #reader video {
         width: 100% !important;
         height: 100% !important;
@@ -19,417 +12,99 @@
     }
 </style>
 
-<div class="max-w-4xl mx-auto">
-    <div class="text-center mb-8">
-        <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Scan & Manage Inventory</h1>
-        <p class="text-lg text-gray-500 mt-2">Choose your preferred method to find a product.</p>
-    </div>
+<div class="max-w-2xl mx-auto">
+    {% include 'includes/alerts.html' %}
 
-    <!-- Main Status/Error Display Area -->
-    <div id="main-status-container" class="mb-6 fixed top-24 right-6 z-[100] w-full max-w-sm"></div>
+    <div class="bg-white p-6 rounded-2xl shadow-lg">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Find or Create Product</h1>
+        <p class="text-gray-600 mb-6">Scan a barcode or enter it manually. The system will either find the existing product or help you create a new one.</p>
 
-    <!-- Main Content Area -->
-    <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-lg min-h-[450px]">
-
-        <!-- Step 1: Mode Selection (Default View) -->
-        <div id="choice-container">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Scan with Camera Card -->
-                <div id="select-scan" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
-                    <i class="fas fa-camera text-5xl text-blue-500 group-hover:text-blue-600 mb-4"></i>
-                    <h2 class="text-2xl font-bold text-gray-800">Scan with Camera</h2>
-                    <p class="text-gray-500 mt-2">Use your device's camera to instantly scan a barcode.</p>
-                </div>
-
-                <!-- Manual Entry Card -->
-                <div id="select-manual" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center">
-                    <i class="fas fa-keyboard text-5xl text-blue-500 group-hover:text-blue-600 mb-4"></i>
-                    <h2 class="text-2xl font-bold text-gray-800">Enter Manually</h2>
-                    <p class="text-gray-500 mt-2">Type in a product's barcode number to look it up.</p>
-                </div>
-            </div>
-             <!-- Search Products Card (Full Width) -->
-            <div id="select-search" class="choice-card cursor-pointer group bg-gray-50 p-8 rounded-xl border border-gray-200 text-center mt-6">
-                <i class="fas fa-search text-5xl text-blue-500 group-hover:text-blue-600 mb-4"></i>
-                <h2 class="text-2xl font-bold text-gray-800">Search Product List</h2>
-                <p class="text-gray-500 mt-2">Find a product by name, brand, or barcode from your existing list.</p>
-            </div>
+        <div class_name="mb-4 border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <button id="tab-scan" class="tab-btn border-blue-500 text-blue-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Scan with Camera
+                </button>
+                <button id="tab-manual" class="tab-btn border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                    Enter Manually
+                </button>
+            </nav>
         </div>
 
-        <!-- Interface Panes (Initially Hidden) -->
-        <div id="interface-panes" class="hidden">
-            <button id="back-to-choices-btn" class="mb-4 text-sm font-semibold text-blue-600 hover:underline"><i class="fas fa-arrow-left mr-2"></i>Back to Choices</button>
+        <form id="barcode-form" action="{% url 'inventory:scan_redirect' supermarket.id %}" method="POST">
+            {% csrf_token %}
 
-            <!-- 1. Scan with Camera Mode -->
-            <div id="mode-scan" class="hidden">
-                <div id="reader" class="relative w-full h-96 bg-gray-900 rounded-lg overflow-hidden"></div>
-                <div id="scan-result" class="mt-4 text-center font-semibold"></div>
+            <div id="pane-manual">
+                <label for="manual-barcode" class="block text-sm font-medium text-gray-700">Barcode</label>
+                <input type="text" name="barcode" id="manual-barcode" class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Type barcode here...">
+                <button type="submit" class="mt-4 w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700">
+                    Find Product
+                </button>
+            </div>
+
+            <div id="pane-scan" class="hidden">
+                <div id="reader" class="w-full h-80 bg-gray-900 rounded-lg overflow-hidden"></div>
                 <p id="scanner-status" class="mt-2 text-center text-gray-500 text-sm">Initializing camera...</p>
+                <input type="hidden" name="barcode" id="scanned-barcode">
             </div>
-
-            <!-- 2. Manual Entry Mode -->
-            <div id="mode-manual" class="hidden">
-                 <h2 class="text-2xl font-bold mb-4">Manual Barcode Entry</h2>
-                 <form id="manual-lookup-form" class="flex flex-col sm:flex-row gap-2 sm:space-x-2">
-                     <input type="text" name="barcode" id="manual-barcode" class="flex-grow p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., 9780321765723">
-                     <button type="submit" class="px-6 py-3 sm:py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 flex items-center justify-center">
-                         <i class="fas fa-search mr-2"></i>Look Up
-                     </button>
-                 </form>
-            </div>
-
-            <!-- 3. Search Product List Mode -->
-            <div id="mode-search" class="hidden">
-                <h2 class="text-2xl font-bold mb-4">Search Existing Products</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                    <div class="md:col-span-2">
-                        <input type="text" id="product-search-input" class="w-full pl-4 pr-4 py-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500" placeholder="Search by name, brand, or barcode...">
-                    </div>
-                    <div>
-                         <select id="product-category-filter" class="w-full py-3 px-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">All Categories</option>
-                            {% for category in categories %}
-                                <option value="{{ category.id }}">{{ category.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                <div id="product-search-results" class="mt-6 max-h-80 overflow-y-auto space-y-2">
-                    <p class="text-center text-gray-500 py-8">Start typing to search for products.</p>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Add/Remove Mode Toggle -->
-    <div class="mb-6 flex justify-center">
-        <div class="relative flex w-full max-w-sm p-1 bg-gray-200 rounded-full">
-            <span id="glider" class="absolute top-1 left-1 h-10 w-1/2 bg-white rounded-full shadow-md transition-transform duration-300 ease-in-out"></span>
-            <button id="add-mode-btn" class="relative z-10 w-1/2 py-2 text-center font-semibold text-green-600">Add Mode</button>
-            <button id="remove-mode-btn" class="relative z-10 w-1/2 py-2 text-center font-semibold text-gray-500">Remove Mode</button>
-        </div>
-    </div>
-
-    <!-- Dynamic Form Area (for Remove Mode) -->
-    <div id="form-container" class="mt-8"></div>
-</div>
-
-<!-- Add to Inventory Modal -->
-<div id="add-inventory-modal" class="fixed inset-0 bg-gray-800 bg-opacity-60 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-10 mx-auto p-5 border w-full max-w-md shadow-lg rounded-2xl bg-white">
-        <div class="mt-3">
-             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-2xl leading-6 font-bold text-gray-900" id="modal-product-name">Add Product</h3>
-                <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
-            <div class="text-center mb-4">
-                <img id="modal-product-image" src="https://placehold.co/200x200?text=Product" alt="Product Image" class="w-32 h-32 object-contain mx-auto rounded-md border bg-white">
-            </div>
-            <div class="mt-2 px-7 py-3">
-                <form id="add-inventory-form">
-                    {% csrf_token %}
-                    <div class="space-y-4 text-left">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Quantity</label>
-                                <input type="number" name="quantity" id="modal-quantity" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700">Expiry Date</label>
-                                <input type="date" name="expiry_date" id="modal-expiry-date" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Manufacture Date (Optional)</label>
-                            <input type="date" name="manufacture_date" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Store Price (€) (Optional)</label>
-                            <input type="number" step="0.01" name="store_price" id="modal-store-price" placeholder="Auto-fills from default price" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <!-- ✅ FIX: Changed to 'rack_id' and is now a <select> -->
-                            <label class="block text-sm font-medium text-gray-700">Rack / Location (Optional)</label>
-                            <select name="rack_id" id="modal-rack" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                                <option value="">Select a rack...</option>
-                                <!-- This is populated from the view -->
-                                {% for rack in racks %}
-                                    <option value="{{ rack.id }}">{{ rack.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Category (Optional)</label>
-                            <select name="category_id" id="modal-category-select" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                                <!-- Populated by JS -->
-                            </select>
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-4 mt-6">
-                        <button type="button" id="cancel-modal-btn" class="w-full px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                        <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md shadow-sm hover:bg-blue-700">Add Item</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+        </form>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<!-- Barcode Scanner Library -->
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- DOM Elements ---
-    const choiceContainer = document.getElementById('choice-container');
-    const interfacePanes = document.getElementById('interface-panes');
-    const allModeDivs = document.querySelectorAll('[id^="mode-"]');
-    const modal = document.getElementById('add-inventory-modal');
-    const modalForm = document.getElementById('add-inventory-form');
-    const manualLookupForm = document.getElementById('manual-lookup-form');
-    const modalProductName = document.getElementById('modal-product-name');
-    const modalCategorySelect = document.getElementById('modal-category-select');
-    const searchInput = document.getElementById('product-search-input');
-    const categoryFilter = document.getElementById('product-category-filter');
-    const searchResultsContainer = document.getElementById('product-search-results');
+    const tabScan = document.getElementById('tab-scan');
+    const tabManual = document.getElementById('tab-manual');
+    const paneScan = document.getElementById('pane-scan');
+    const paneManual = document.getElementById('pane-manual');
+    const barcodeForm = document.getElementById('barcode-form');
+    const manualBarcode = document.getElementById('manual-barcode');
+    const scannedBarcode = document.getElementById('scanned-barcode');
     const scannerStatus = document.getElementById('scanner-status');
-    const mainStatusContainer = document.getElementById('main-status-container');
-    const modalProductImage = document.getElementById('modal-product-image');
-    const modalStorePriceInput = document.getElementById('modal-store-price');
-
-    // --- State & Config ---
     let html5QrCode;
-    let productForModal = null;
-    let currentMode = 'add'; // 'add' or 'remove'
-    const supermarketId = {{ supermarket.id }};
-    const csrfToken = '{{ csrf_token }}';
 
-    // --- Core UI Logic & Event Listeners ---
-    function switchMode(selectedMode) {
-        mainStatusContainer.innerHTML = '';
-        choiceContainer.classList.add('hidden');
-        interfacePanes.classList.remove('hidden');
-        allModeDivs.forEach(div => div.classList.add('hidden'));
-        document.getElementById(`mode-${selectedMode}`).classList.remove('hidden');
-
-        if (selectedMode === 'scan') startScanner();
-        else stopScanner();
-    }
-
-    function showChoices() {
-        interfacePanes.classList.add('hidden');
-        choiceContainer.classList.remove('hidden');
-        formContainer.innerHTML = '';
-        mainStatusContainer.innerHTML = '';
-        stopScanner();
-    }
-
-    function setMode(mode) {
-        currentMode = mode;
-        formContainer.innerHTML = '';
-        mainStatusContainer.innerHTML = '';
-        const isAdd = mode === 'add';
-        const glider = document.getElementById('glider');
-        glider.style.transform = isAdd ? 'translateX(0%)' : 'translateX(100%)';
-        document.getElementById('add-mode-btn').classList.toggle('text-green-600', isAdd);
-        document.getElementById('add-mode-btn').classList.toggle('text-gray-500', !isAdd);
-        document.getElementById('remove-mode-btn').classList.toggle('text-red-600', !isAdd);
-        document.getElementById('remove-mode-btn').classList.toggle('text-gray-500', isAdd);
-    }
-
-    // --- Event Listeners ---
-    document.getElementById('select-scan').addEventListener('click', () => switchMode('scan'));
-    document.getElementById('select-manual').addEventListener('click', () => switchMode('manual'));
-    document.getElementById('select-search').addEventListener('click', () => switchMode('search'));
-    document.getElementById('back-to-choices-btn').addEventListener('click', showChoices);
-
-    document.getElementById('add-mode-btn').addEventListener('click', () => setMode('add'));
-    document.getElementById('remove-mode-btn').addEventListener('click', () => setMode('remove'));
-
-    manualLookupForm.addEventListener('submit', handleManualLookup);
-    modalForm.addEventListener('submit', handleModalFormSubmit);
-    document.getElementById('close-modal-btn').addEventListener('click', closeAddModal);
-    document.getElementById('cancel-modal-btn').addEventListener('click', closeAddModal);
-
-    function showMainAlert(title, details, type = 'info') {
-        const colors = {
-            info: { border: 'border-blue-500', bg: 'bg-blue-100', text: 'text-blue-700' },
-            success: { border: 'border-green-500', bg: 'bg-green-100', text: 'text-green-700' },
-            error: { border: 'border-red-500', bg: 'bg-red-100', text: 'text-red-700' }
-        };
-        const alertHtml = `<div class="p-4 mb-4 rounded-lg shadow-lg ${colors[type].bg} ${colors[type].border} ${colors[type].text} border-l-4" role="alert">
-            <p class="font-bold">${title}</p>
-            <p>${details}</p>
-        </div>`;
-        mainStatusContainer.innerHTML = alertHtml;
-        setTimeout(() => mainStatusContainer.innerHTML = '', 5000);
-    }
-
-    // --- Modal Logic ---
-    function openAddModal(product, categories) {
-        productForModal = product;
-        modalProductName.textContent = `Add "${product.name}"`;
-        modalProductImage.src = product.image_url || 'https://placehold.co/200x200?text=No+Image';
-
-        // Populate categories and pre-select
-        let categoryOptions = categories.map(cat => `<option value="${cat.id}" ${cat.id === product.category_id ? 'selected' : ''}>${cat.name}</option>`).join('');
-        modalCategorySelect.innerHTML = `<option value="">Select a category...</option>${categoryOptions}`;
-
-        // ✅ FIX: Auto-fill the store price from the API data
-        if (product.default_store_price) {
-            modalStorePriceInput.value = product.default_store_price;
+    function activateTab(tab) {
+        if (tab === 'scan') {
+            // Activate Scan Tab
+            tabScan.classList.add('border-blue-500', 'text-blue-600');
+            tabScan.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            paneScan.classList.remove('hidden');
+            // Deactivate Manual Tab
+            tabManual.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            tabManual.classList.remove('border-blue-500', 'text-blue-600');
+            paneManual.classList.add('hidden');
+            // Enable/disable form fields
+            manualBarcode.disabled = true;
+            scannedBarcode.disabled = false;
+            startScanner();
         } else {
-            modalStorePriceInput.value = ''; // Clear it if no default is set
-        }
-
-        // Set smart defaults
-        const expiryDateInput = document.getElementById('modal-expiry-date');
-        const quantityInput = document.getElementById('modal-quantity');
-        const today = new Date().toISOString().split('T')[0];
-        expiryDateInput.setAttribute('min', today);
-        const nextWeek = new Date();
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        expiryDateInput.value = nextWeek.toISOString().split('T')[0];
-
-        modal.classList.remove('hidden');
-        setTimeout(() => quantityInput.focus(), 100);
-    }
-
-    function closeAddModal() {
-        modal.classList.add('hidden');
-        modalForm.reset();
-        productForModal = null;
-    }
-    window.onclick = (event) => { if (event.target == modal) closeAddModal(); };
-
-    async function handleModalFormSubmit(event) {
-        event.preventDefault();
-        const formData = new FormData(event.target);
-        const data = Object.fromEntries(formData.entries());
-        data.barcode = productForModal.barcode;
-        data.supermarket_id = supermarketId;
-        data.mode = 'add';
-
-        // Ensure empty optional fields are sent as 'null' or empty string
-        data.store_price = data.store_price || null;
-        data.rack_id = data.rack_id || null;
-        data.category_id = data.category_id || null;
-        data.manufacture_date = data.manufacture_date || null;
-
-        showMainAlert('Adding item...', 'Please wait.', 'info');
-        closeAddModal();
-
-        try {
-            const res = await fetch('/api/scan/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                body: JSON.stringify(data)
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.error || 'Failed to add item.');
-            showMainAlert('Success!', `"${productForModal.name}" was added to inventory.`, 'success');
-            showChoices();
-        } catch (err) {
-            showMainAlert('Error', err.message, 'error');
+            // Activate Manual Tab
+            tabManual.classList.add('border-blue-500', 'text-blue-600');
+            tabManual.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            paneManual.classList.remove('hidden');
+            // Deactivate Scan Tab
+            tabScan.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            tabScan.classList.remove('border-blue-500', 'text-blue-600');
+            paneScan.classList.add('hidden');
+            // Enable/disable form fields
+            manualBarcode.disabled = false;
+            scannedBarcode.disabled = true;
+            stopScanner();
         }
     }
 
-    // --- API & Interaction Logic ---
-    async function lookupBarcode(barcode) {
-        barcode = barcode.trim();
-        if (!barcode) return;
+    tabScan.addEventListener('click', () => activateTab('scan'));
+    tabManual.addEventListener('click', () => activateTab('manual'));
 
-        showMainAlert('Processing...', `Looking up barcode: ${barcode}`, 'info');
-
-        try {
-            const response = await fetch('/api/scan/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                body: JSON.stringify({ barcode, supermarket_id: supermarketId, mode: 'lookup' })
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Request failed');
-
-            mainStatusContainer.innerHTML = '';
-
-            // ✅ UPDATED: Check for current operation mode
-            if (currentMode === 'add') {
-                openAddModal(data.product, data.categories);
-            } else {
-                // Handle 'remove' mode
-                if (data.existing_items && data.existing_items.length > 0) {
-                    renderRemoveForm(data.product, data.existing_items);
-                } else {
-                    showMainAlert('Not in Inventory', `"${data.product.name}" is not in your inventory.`, 'error');
-                }
-            }
-        } catch (error) {
-            mainStatusContainer.innerHTML = '';
-            showMainAlert('API Error', error.message, 'error');
-            showChoices();
-        }
-    }
-
-    // --- Render Remove Form ---
-    function renderRemoveForm(product, items) {
-        let itemsHtml = items.map(i => `
-            <label class="flex items-center p-3 border rounded-lg hover:bg-gray-50">
-                <input type="radio" name="inventory_item_id" value="${i.id}" class="h-4 w-4">
-                <div class="ml-3">
-                    <p class="font-semibold">Expires: ${i.expiry_date} (Qty: ${i.quantity})</p>
-                    <p class="text-sm text-gray-500">Location: ${i.rack_name || 'N/A'} | Price: €${i.store_price || '--'}</p>
-                </div>
-            </label>`).join('');
-
-        const formHtml = `
-        <div class="bg-white p-6 rounded-lg shadow-lg">
-            <div class="flex items-center gap-4 mb-4">
-                <img src="${product.image_url || 'https://placehold.co/96x96'}" class="w-24 h-24 object-contain rounded">
-                <div>
-                    <h3 class="text-lg font-bold">${product.name}</h3>
-                    <p class="text-gray-500">${product.brand || ''}</p>
-                </div>
-            </div>
-            <form id="remove-item-form">
-                <fieldset class="space-y-2">
-                    <legend class="font-semibold mb-2">Select a batch to remove:</legend>
-                    ${itemsHtml}
-                </fieldset>
-                <button type="submit" class="mt-4 w-full bg-red-600 text-white font-bold py-3 rounded-lg hover:bg-red-700">Remove Selected Batch</button>
-            </form>
-        </div>`;
-        formContainer.innerHTML = formHtml;
-
-        document.getElementById('remove-item-form').addEventListener('submit', async e => {
-            e.preventDefault();
-            const itemId = new FormData(e.target).get('inventory_item_id');
-            if(!itemId) { showMainAlert('Selection Required', 'Please select a batch to remove.', 'error'); return; }
-
-            showMainAlert('Removing item...', 'Please wait.', 'info');
-            try {
-                const res = await fetch('/api/scan/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                    body: JSON.stringify({ inventory_item_id: itemId, supermarket_id: supermarketId, mode: 'remove' })
-                });
-                const result = await res.json();
-                if (!res.ok) throw new Error(result.error);
-                showMainAlert('Success!', 'Item batch removed.', 'success');
-                formContainer.innerHTML = '';
-            } catch(err) {
-                showMainAlert('Error', err.message, 'error');
-            }
-        });
-    }
-
-    // --- Mode 1: Scanner ---
-    function onScanSuccess(decodedText) {
-        document.getElementById('scan-result').innerHTML = `<p class="text-green-600">✅ Success! Scanned: ${decodedText}</p>`;
+    // --- Scanner Logic ---
+    function onScanSuccess(decodedText, decodedResult) {
+        scannerStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Success! Found: ${decodedText}</p>`;
         stopScanner();
-        lookupBarcode(decodedText);
+        // Fill the hidden form field and submit
+        scannedBarcode.value = decodedText;
+        barcodeForm.submit();
     }
 
     async function startScanner() {
@@ -439,7 +114,7 @@ document.addEventListener('DOMContentLoaded', function() {
         scannerStatus.textContent = "Requesting camera access...";
         try {
             await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
-            scannerStatus.textContent = "Scanner active";
+            scannerStatus.textContent = "Scanner active. Please scan a barcode.";
         } catch (err) {
             scannerStatus.textContent = `Camera Error: ${err}`;
         }
@@ -451,73 +126,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // --- Mode 2: Manual Entry ---
-    function handleManualLookup(event) {
-        event.preventDefault();
-        const barcode = document.getElementById('manual-barcode').value;
-        if (barcode) {
-            lookupBarcode(barcode);
-        }
-    }
-
-    // --- Mode 3: Product Search ---
-    let searchTimeout;
-    const debouncedSearch = () => {
-        clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(performProductSearch, 300);
-    };
-    searchInput.addEventListener('input', debouncedSearch);
-    categoryFilter.addEventListener('change', debouncedSearch);
-
-    async function performProductSearch() {
-        const query = searchInput.value;
-        const categoryId = categoryFilter.value;
-        if (query.length < 2 && !categoryId) {
-            searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Start typing or select a category.</p>`;
-            return;
-        }
-
-        searchResultsContainer.innerHTML = `<div class="text-center p-10"><i class="fas fa-spinner fa-spin fa-2x text-gray-400"></i></div>`;
-
-        try {
-            const url = `{% url 'inventory:product_search_api' %}?q=${encodeURIComponent(query)}&category=${encodeURIComponent(categoryId)}`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Search request failed');
-
-            const data = await response.json();
-            renderSearchResults(data.products, data.categories);
-        } catch (error) {
-             searchResultsContainer.innerHTML = `<p class="text-center text-red-500 py-8">${error.message}</p>`;
-        }
-    }
-
-    function renderSearchResults(products, categories) {
-         if (!products || products.length === 0) {
-            searchResultsContainer.innerHTML = `<p class="text-center text-gray-500 py-8">No products found.</p>`;
-            return;
-        }
-        const productsHtml = products.map(product => `
-            <div class="flex items-center p-2 bg-gray-50 rounded-md hover:bg-gray-100">
-                <img src="${product.image_url || 'https://placehold.co/48x48'}" class="w-12 h-12 rounded-md mr-4 object-contain border">
-                <div class="flex-grow">
-                    <p class="font-bold text-gray-800">${product.name}</p>
-                    <p class="text-sm text-gray-500">${product.brand || 'No Brand'} | ${product.barcode}</p>
-                </div>
-                <button data-product='${JSON.stringify(product)}' data-categories='${JSON.stringify(categories)}' class="add-from-search-btn px-4 py-2 bg-green-500 text-white font-semibold rounded-md text-sm">Add</button>
-            </div>
-        `).join('');
-        searchResultsContainer.innerHTML = productsHtml;
-    }
-
-    searchResultsContainer.addEventListener('click', function(e) {
-        if (e.target && e.target.classList.contains('add-from-search-btn')) {
-            const product = JSON.parse(e.target.dataset.product);
-            const categories = JSON.parse(e.target.dataset.categories);
-            // This button only ever adds, so we can call openAddModal directly
-            openAddModal(product, categories);
-        }
-    });
+    // Initialize to manual tab by default
+    activateTab('manual');
 });
 </script>
 {% endblock %}
-
