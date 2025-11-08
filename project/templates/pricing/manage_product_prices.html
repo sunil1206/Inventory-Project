@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto">
-    {% include 'includes/alerts.html' %}
+    
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <h2 class="text-xl font-bold text-gray-800 mb-4">Set Product Defaults</h2>
         <p class="text-gray-600 mb-4">
@@ -15,8 +15,13 @@
         <form method="GET" id="filter-form" class="mb-6 p-4 bg-gray-50 rounded-lg border">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="md:col-span-2 lg:col-span-4">
-                    <label class="block text-sm font-medium text-gray-700">Search</label>
-                    <input type="text" name="q" value="{{ search_query }}" placeholder="Search by name, brand, or barcode..." class="mt-1 w-full p-2 border border-gray-300 rounded-md">
+                    <label for="search-input" class="block text-sm font-medium text-gray-700">Search</label>
+                    <div class="flex gap-2 mt-1">
+                        <input type="text" name="q" id="search-input" value="{{ search_query }}" placeholder="Search by name, brand, or barcode..." class="w-full p-2 border border-gray-300 rounded-md">
+                        <button type="button" id="scan-to-find-btn" class="px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700">
+                            <i class="fas fa-qrcode"></i>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Category</label>
@@ -149,24 +154,96 @@
         </div>
     </div>
 </div>
+
+<div id="scan-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">Scan Barcode to Find</h3>
+            <button id="close-scan-modal-btn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div id="reader" class="w-full rounded-lg overflow-hidden bg-gray-900" style="height: 400px;"></div>
+        <div id="scan-status" class="mt-4 text-center font-semibold text-gray-600"></div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script>
-    // This script makes the filters submit automatically
     document.addEventListener('DOMContentLoaded', function() {
+        // --- Auto-submit filter logic (from your template) ---
         const filterForm = document.getElementById('filter-form');
-
-        // Find all <select> dropdowns inside the filter form
         const filterSelects = filterForm.querySelectorAll('select');
-
-        // Add an event listener to each one
         filterSelects.forEach(function(select) {
             select.addEventListener('change', function() {
-                // When a dropdown is changed, submit the GET form
                 filterForm.submit();
             });
         });
+
+        // --- NEW SCANNER LOGIC ---
+        const scanModal = document.getElementById('scan-modal');
+        const scanBtn = document.getElementById('scan-to-find-btn');
+        const closeScanBtn = document.getElementById('close-scan-modal-btn');
+        const scanStatus = document.getElementById('scan-status');
+        const searchInput = document.getElementById('search-input');
+        let html5QrCode;
+
+        function onScanSuccess(decodedText) {
+            scanStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Success! Found: ${decodedText}</p>`;
+            stopScanner();
+            closeScanModal();
+
+            // --- This is the core logic ---
+            // 1. Clear all other filters
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-rack').value = '';
+            document.getElementById('filter-price-status').value = '';
+
+            // 2. Set the search input to the scanned barcode
+            searchInput.value = decodedText;
+
+            // 3. Submit the filter form
+            filterForm.submit();
+        }
+
+        async function startScanner() {
+            if (location.protocol !== 'https:') {
+                scanStatus.innerHTML = `<p class="text-red-500 font-bold">Camera requires HTTPS. Please run <strong>python manage.py runsslserver</strong></p>`;
+                return;
+            }
+            if (html5QrCode && html5QrCode.isScanning) return;
+            html5QrCode = new Html5Qrcode("reader");
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            scanStatus.innerText = "Requesting camera access...";
+            try {
+                await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
+                scanStatus.innerText = "📷 Scanner active. Please scan a barcode.";
+            } catch (err) {
+                scanStatus.innerHTML = `<p class="text-red-500">Camera Error: ${err}. Please grant permissions.</p>`;
+            }
+        }
+
+        function stopScanner() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().catch(err => console.error("Failed to stop scanner", err));
+            }
+        }
+
+        function openScanModal() {
+            scanModal.classList.remove('hidden');
+            startScanner();
+        }
+        function closeScanModal() {
+            stopScanner();
+            scanModal.classList.add('hidden');
+            scanStatus.innerHTML = '';
+        }
+
+        scanBtn.addEventListener('click', openScanModal);
+        closeScanBtn.addEventListener('click', closeScanModal);
+        window.onclick = function(event) {
+            if (event.target == scanModal) closeScanModal();
+        }
     });
 </script>
 {% endblock %}

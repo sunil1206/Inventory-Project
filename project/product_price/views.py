@@ -53,7 +53,13 @@ def manage_product_prices_view(request, supermarket_id):
     categories, and racks from a single page.
     """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
-    racks = Rack.objects.filter(supermarket=supermarket)
+
+    # Fetch related objects for the filters and forms
+    try:
+        racks = Rack.objects.filter(supermarket=supermarket)
+    except NameError:
+        racks = []  # Fallback if Rack model isn't imported
+
     categories = Category.objects.all()
 
     # --- POST (Create/Update Price & Defaults) Logic ---
@@ -75,7 +81,7 @@ def manage_product_prices_view(request, supermarket_id):
             if price_str:
                 new_price = decimal.Decimal(price_str)
 
-            # --- THIS IS THE FIX ---
+            # --- LOGIC FIX ---
             # Use update_or_create to safely find or create the object
             # and update its values in a single, atomic database transaction.
             obj, created = ProductPrice.objects.update_or_create(
@@ -107,14 +113,73 @@ def manage_product_prices_view(request, supermarket_id):
                     messages.info(request, f"Updated price for {updated_count} existing inventory batches.")
 
         except (decimal.InvalidOperation, ValueError):
-            messages.error(request, "Invalid price format.")
+            messages.error(request, "Invalid price format. Please enter a number like 12.50.")
         except Exception as e:
             messages.error(request, f"An error occurred: {e}")
+            logger.error(f"Error in manage_product_prices POST: {e}", exc_info=True)
 
         query_params = request.GET.urlencode()
         redirect_url = f"{request.path}?{query_params}#product-row-{product.barcode}"
         return redirect(redirect_url)
 
+    # --- GET Request (Read) Logic ---
+
+    price_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values('price')[:1]
+    cat_name_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values(
+        'default_category__name')[:1]
+    rack_name_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values(
+        'default_rack__name')[:1]
+
+    product_list = Product.objects.annotate(
+        current_price=Subquery(price_subquery, output_field=DecimalField()),
+        current_category=Subquery(cat_name_subquery),
+        current_rack=Subquery(rack_name_subquery)
+    ).order_by('name')
+
+    # --- Filters ---
+    query = request.GET.get('q', '')
+    category_id = request.GET.get('category', '')
+    rack_id_filter = request.GET.get('rack', '')
+    price_status = request.GET.get('price_status', '')
+
+    if query:
+        product_list = product_list.filter(
+            Q(name__icontains=query) | Q(brand__icontains=query) | Q(barcode__icontains=query))
+    if category_id:
+        product_list = product_list.filter(price_listings__default_category__id=category_id)
+    if rack_id_filter:
+        product_list = product_list.filter(price_listings__default_rack__id=rack_id_filter)
+    if price_status == 'set':
+        product_list = product_list.filter(current_price__isnull=False)
+    elif price_status == 'unset':
+        product_list = product_list.filter(current_price__isnull=True)
+
+    paginator = Paginator(product_list.distinct(), 30)
+    page_number = request.GET.get('page')
+
+    # --- "Scan to Find" Feature Logic ---
+    if query and not page_number and Product.objects.filter(barcode=query).exists():
+        product_ids = list(product_list.values_list('barcode', flat=True))
+        try:
+            index = product_ids.index(query)
+            page_number = (index // 30) + 1
+        except ValueError:
+            page_number = 1
+    # --- End "Scan to Find" Logic ---
+
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'supermarket': supermarket,
+        'page_obj': page_obj,
+        'categories': categories,
+        'racks': racks,
+        'search_query': query,
+        'category_filter': category_id,
+        'rack_filter': rack_id_filter,
+        'price_status_filter': price_status,
+    }
+    return render(request, 'pricing/manage_product_prices.html', context)
     # --- GET Request (Read) Logic ---
     # (Your GET logic appears correct and does not need changes)
     price_subquery = ProductPrice.objects.filter(product=OuterRef('pk'), supermarket=supermarket).values('price')[:1]

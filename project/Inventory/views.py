@@ -80,7 +80,7 @@ def scan_redirect_view(request, supermarket_id):
         # Redirect to the 'create product' form, pre-filling the barcode
         messages.warning(request, "New barcode. Please create the product.")
         # We pass the barcode as a URL query parameter
-        create_url = reverse('inventory:create_product', args=[supermarket.id])
+        create_url = reverse('inventory:product_list', args=[supermarket.id])
         return redirect(f'{create_url}?barcode={barcode}')
 
 
@@ -902,10 +902,8 @@ def scan_api(request):
         barcode = request.data.get('barcode')
         if not barcode:
             return Response({'error': 'Barcode required.'}, status=400)
-
         try:
             product, created = Product.objects.get_or_create(barcode=barcode, defaults={'name': f'Product {barcode}'})
-
             # --- ✅ Scrape new fields ---
             if (created or not product.name or product.name.startswith("Product ")) and not product.cover_image:
                 try:
@@ -937,7 +935,6 @@ def scan_api(request):
                     default_rack_id = defaults_entry.default_rack_id
             except ProductPrice.DoesNotExist:
                 pass
-
             return Response({
                 'product': {
                     'barcode': product.barcode, 'name': product.name, 'brand': product.brand,
@@ -972,7 +969,6 @@ def scan_api(request):
 
             if not form_expiry_date:
                 return Response({'error': 'Expiry date is required.'}, status=400)
-
             # --- 2. Initialize final values ---
             final_category_id = form_category_id
             final_rack_id = form_rack_id

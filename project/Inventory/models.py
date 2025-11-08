@@ -188,7 +188,7 @@ class ProductPrice(models.Model):
     product = models.ForeignKey('Inventory.Product', on_delete=models.SET_NULL, null=True, related_name='price_listings')
     supermarket = models.ForeignKey('Inventory.Supermarket', on_delete=models.CASCADE, related_name='product_prices')
     product = models.ForeignKey('Inventory.Product', on_delete=models.CASCADE, related_name='price_listings')
-    price = models.DecimalField(max_digits=5, decimal_places=2)
+    price = models.DecimalField(max_digits=5, decimal_places=2,null=True, blank=True)
     # --- ADD THESE TWO NEW FIELDS ---
     default_category = models.ForeignKey(
         'Inventory.Category',

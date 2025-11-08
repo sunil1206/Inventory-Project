@@ -402,7 +402,8 @@ def remove_as_wastage_view(request, supermarket_id, item_id):
         supermarket=item.supermarket,
         category=item.get_category,
         quantity_wasted=item.quantity,
-        expiry_date=item.expiry_date
+        expiry_date=item.expiry_date,
+
     )
 
     item_name = item.product.name
