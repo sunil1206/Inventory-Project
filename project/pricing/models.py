@@ -117,12 +117,59 @@ class DiscountedSale(models.Model):
         return "Manual Price / None"
 
 
+#
+# class WastageRecord(models.Model):
+#     """
+#     Logs items that were removed as wastage (expired, damaged, etc.)
+#     """
+#     # ✅ FIX: Corrected ForeignKey paths
+#     product = models.ForeignKey(
+#         'Inventory.Product',
+#         on_delete=models.SET_NULL,
+#         null=True,
+#         related_name='wastage_logs'
+#     )
+#     supermarket = models.ForeignKey(
+#         'Inventory.Supermarket',
+#         on_delete=models.CASCADE,
+#         related_name='wastage_logs'
+#     )
+#     category = models.ForeignKey(
+#         'Inventory.Category',
+#         on_delete=models.SET_NULL,
+#         null=True, blank=True,
+#         related_name='wastage_logs'
+#     )
+#
+#     # ✅ NEW: Added the price to calculate financial loss
+#     original_store_price = models.DecimalField(
+#         max_digits=10,
+#         decimal_places=2,
+#         null=True, blank=True,
+#         help_text="The price of the item when it was wasted."
+#     )
+#
+#     quantity_wasted = models.PositiveIntegerField(default=1)
+#     date_removed = models.DateTimeField(auto_now_add=True)
+#     expiry_date = models.DateField(help_text="The expiry date of the item when it was wasted")
+#
+#     def __str__(self):
+#         product_name = self.product.name if self.product else "[Deleted Product]"
+#         return f"Wasted {self.quantity_wasted}x {product_name}"
+
+
+from django.db import models
+from django.utils import timezone
+from django.db import models
+from django.utils import timezone
 
 class WastageRecord(models.Model):
     """
-    Logs items that were removed as wastage (expired, damaged, etc.)
+    Logs items removed as wastage (expired, damaged, etc.)
+    Automatically fetches the product price from the related inventory.
     """
-    # ✅ FIX: Corrected ForeignKey paths
+
+    # --- Foreign Keys ---
     product = models.ForeignKey(
         'Inventory.Product',
         on_delete=models.SET_NULL,
@@ -141,36 +188,57 @@ class WastageRecord(models.Model):
         related_name='wastage_logs'
     )
 
-    # ✅ NEW: Added the price to calculate financial loss
+    quantity_wasted = models.PositiveIntegerField(default=1)
+    expiry_date = models.DateField(help_text="Expiry date of the wasted item")
+    date_removed = models.DateTimeField(auto_now_add=True)
+
+    # --- Price (Auto-filled from InventoryItem) ---
     original_store_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
-        null=True, blank=True,
-        help_text="The price of the item when it was wasted."
+        null=True,
+        blank=True,
+        help_text="Auto-fetched from InventoryItem when saved."
     )
 
-    quantity_wasted = models.PositiveIntegerField(default=1)
-    date_removed = models.DateTimeField(auto_now_add=True)
-    expiry_date = models.DateField(help_text="The expiry date of the item when it was wasted")
+    reason = models.CharField(max_length=100, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date_removed']
+        verbose_name = "Wastage Record"
+        verbose_name_plural = "Wastage Records"
 
     def __str__(self):
         product_name = self.product.name if self.product else "[Deleted Product]"
-        return f"Wasted {self.quantity_wasted}x {product_name}"
+        return f"{self.quantity_wasted}x {product_name} wasted ({self.reason or 'No reason'})"
 
+    @property
+    def total_loss(self):
+        """Calculate total financial loss."""
+        if self.original_store_price:
+            return round(self.original_store_price * self.quantity_wasted, 2)
+        return 0
 
+    def save(self, *args, **kwargs):
+        """
+        Auto-fill store price and category based on the latest inventory record
+        of the given product and supermarket.
+        """
+        if not self.original_store_price and self.product and self.supermarket:
+            from Inventory.models import InventoryItem  # ✅ Lazy import to avoid circular dependency
+            latest_item = (
+                InventoryItem.objects
+                .filter(product=self.product, supermarket=self.supermarket)
+                .order_by('-added_at')
+                .first()
+            )
+            if latest_item:
+                self.original_store_price = latest_item.store_price
+                if not self.category:
+                    self.category = latest_item.get_category
+                if not self.expiry_date:
+                    self.expiry_date = latest_item.expiry_date
 
-#
-# class WastageRecord(models.Model):
-#     """
-#     Logs items that were removed as wastage (expired, damaged, etc.)
-#     """
-#     product = models.ForeignKey('Inventory.Product', on_delete=models.SET_NULL, null=True)
-#     supermarket = models.ForeignKey('Inventory.Supermarket', on_delete=models.CASCADE)
-#     category = models.ForeignKey('Inventory.Category', on_delete=models.SET_NULL, null=True, blank=True)
-#     quantity_wasted = models.PositiveIntegerField(default=1)
-#     date_removed = models.DateTimeField(auto_now_add=True)
-#     expiry_date = models.DateField(help_text="The expiry date of the item when it was wasted")
-#
-#     def __str__(self):
-#         product_name = self.product.name if self.product else "[Deleted Product]"
-#         return f"Wasted {self.quantity_wasted}x {product_name}"
+        super().save(*args, **kwargs)
+
