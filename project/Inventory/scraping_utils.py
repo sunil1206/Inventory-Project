@@ -167,7 +167,7 @@ def scrape_competitor_prices(barcode, product_name):
 #                     continue
 #
 #     return competitors
-#
+
 #
 # def scrape_competitor_prices():
 #     return None
