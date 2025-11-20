@@ -1,0 +1,176 @@
+{% extends "inventory/base.html" %}
+{% block title %}Scan Unit Barcode{% endblock %}
+{% block header %}Packaging · Scan Consumer Unit (CU){% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto space-y-6">
+
+    <!-- =============================== -->
+    <!-- Intro Card -->
+    <!-- =============================== -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">Step 1: Scan the Unit Barcode</h2>
+        <p class="text-sm text-gray-600">
+            Scan the <strong>consumer unit (CU)</strong> barcode printed on the retail label.
+            If carton packaging is missing, you will be guided to scan the carton.
+        </p>
+    </div>
+
+    <!-- =============================== -->
+    <!-- Scanner Area (Mobile Priority) -->
+    <!-- =============================== -->
+    <div class="bg-white rounded-xl shadow p-6 space-y-4">
+
+        <!-- Scanner Box -->
+        <div id="scannerBox" class="relative w-full h-72 bg-black rounded-xl overflow-hidden flex items-center justify-center">
+            <div id="reader" class="w-full h-full text-white flex items-center justify-center"></div>
+
+            <!-- Start overlay -->
+            <button id="startCameraBtn"
+                class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 text-white text-xl font-semibold rounded-xl">
+                📷 Tap to Start Scanner
+                <span class="text-sm mt-1 opacity-80">Use back camera</span>
+            </button>
+        </div>
+
+        <p id="statusBox" class="text-sm text-center text-gray-500"></p>
+
+        <!-- Manual entry -->
+        <form id="unitForm" class="flex gap-2 pt-2">
+            {% csrf_token %}
+            <input id="unitBarcodeInput"
+                name="barcode"
+                type="text"
+                class="flex-1 border rounded-lg px-3 py-2 text-sm"
+                placeholder="Or type barcode manually…">
+            <button type="submit"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+                Check
+            </button>
+        </form>
+
+        <!-- Mapping Info -->
+        <div id="mappingInfo"
+             class="hidden mt-4 p-4 border border-gray-200 bg-gray-50 rounded-lg text-sm text-gray-700"></div>
+
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<script>
+(function() {
+    const form = document.getElementById("unitForm");
+    const input = document.getElementById("unitBarcodeInput");
+    const statusBox = document.getElementById("statusBox");
+    const mappingInfo = document.getElementById("mappingInfo");
+    const startBtn = document.getElementById("startCameraBtn");
+
+    let scanner = null;
+
+    // ================================
+    // Manual form submit
+    // ================================
+    form.addEventListener("submit", function(e) {
+        e.preventDefault();
+        const barcode = input.value.trim();
+        if (!barcode) return;
+
+        checkUnitBarcode(barcode);
+    });
+
+    // ================================
+    // API request function
+    // ================================
+    function checkUnitBarcode(barcode) {
+        statusBox.textContent = "Checking…";
+
+        const formData = new FormData();
+        formData.append("barcode", barcode);
+        formData.append("csrfmiddlewaretoken", "{{ csrf_token }}");
+
+        fetch("{% url 'packaging:check_unit_api' %}", {
+            method: "POST",
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => handleResponse(data, barcode))
+        .catch(err => {
+            statusBox.innerHTML = `<span class='text-red-600'>Error: ${err}</span>`;
+        });
+    }
+
+    // ================================
+    // Response handler
+    // ================================
+    function handleResponse(data, barcode) {
+        mappingInfo.classList.add("hidden");
+
+        if (data.status === "not_found") {
+            statusBox.innerHTML =
+                `<span class='text-red-600 font-semibold'>
+                    No product found. Add product first in Product Catalog.
+                </span>`;
+            return;
+        }
+
+        if (data.status === "carton_exists") {
+            statusBox.innerHTML =
+                `<span class='text-green-600 font-semibold'>Packaging mapped ✔</span>`;
+            mappingInfo.classList.remove("hidden");
+            mappingInfo.innerHTML = `
+                <p><strong>Product:</strong> ${data.product_name}</p>
+                <p><strong>Unit Barcode:</strong> ${data.unit_barcode}</p>
+                <p><strong>Carton Barcode:</strong> ${data.carton_barcode}</p>
+                <p><strong>Units per carton:</strong> ${data.units_per_carton}</p>
+            `;
+            return;
+        }
+
+        if (data.status === "need_carton") {
+            statusBox.innerHTML =
+                `<span class='text-orange-600 font-semibold'>
+                    No carton mapping yet. Redirecting to carton scanner…
+                </span>`;
+
+            setTimeout(() => {
+                window.location.href =
+                    "{% url 'packaging:scan_carton' 'CU_PLACEHOLDER' %}"
+                    .replace("CU_PLACEHOLDER", barcode);
+            }, 600);
+        }
+    }
+
+    // ================================
+    // Camera Scanner
+    // ================================
+    startBtn.addEventListener("click", function() {
+        if (scanner) return;
+
+        startBtn.classList.add("hidden");
+        statusBox.textContent = "Starting camera…";
+
+        scanner = new Html5Qrcode("reader");
+
+        scanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+                // Vibrate for better UX
+                if (navigator.vibrate) navigator.vibrate(70);
+
+                input.value = decodedText;
+                checkUnitBarcode(decodedText);
+            }
+        ).catch(err => {
+            statusBox.textContent = "Camera error: " + err;
+            startBtn.classList.remove("hidden");
+        });
+    });
+})();
+</script>
+{% endblock %}

@@ -37,6 +37,8 @@ path('accounts/', include('allauth.urls')), # Allauth URLs
 path('users/', include('users.urls')),
 path('pricing/', include('pricing.urls')),
 path('product_price/', include('product_price.urls')),
+path("packaging/", include("order.urls")),
+
 
 ]
 

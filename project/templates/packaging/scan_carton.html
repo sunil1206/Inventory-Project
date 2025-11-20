@@ -1,0 +1,118 @@
+{% extends "inventory/base.html" %}
+{% block title %}Scan Carton Barcode{% endblock %}
+{% block header %}Packaging: Map Carton (DU){% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto bg-white rounded-lg shadow p-6">
+    <h2 class="text-lg font-semibold mb-4">Step 2 · Scan Carton for {{ product.name }}</h2>
+
+    <p class="text-sm text-gray-600 mb-3">
+        Unit barcode (CU): <span class="font-mono">{{ unit_barcode }}</span>
+    </p>
+
+    <div id="statusBox" class="mb-4 text-sm text-gray-600"></div>
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+            Carton Barcode (DU)
+        </label>
+        <input id="cartonBarcodeInput"
+               type="text"
+               class="w-full border rounded px-3 py-2"
+               placeholder="Scan or type carton barcode">
+    </div>
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+            Units per carton
+        </label>
+        <input id="unitsInput"
+               type="number"
+               min="1"
+               value="6"
+               class="w-32 border rounded px-3 py-2">
+    </div>
+
+    <button id="saveBtn"
+            class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mb-3">
+        Save Mapping
+    </button>
+
+    <div class="mb-4">
+        <p class="text-sm text-gray-500 mb-2">Or scan carton with camera:</p>
+        <div id="reader" class="w-full h-64 bg-gray-100 rounded flex items-center justify-center text-gray-400">
+            Camera will appear here…
+        </div>
+        <button id="startCameraBtn"
+                class="mt-3 w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+            Start Camera Scanner
+        </button>
+    </div>
+
+    <a href="{% url 'packaging:scan_unit' %}"
+       class="text-sm text-gray-500 hover:text-gray-700 underline">
+        ← Back to Unit Scanner
+    </a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+(function() {
+    const unitBarcode = "{{ unit_barcode }}";
+    const cartonInput = document.getElementById("cartonBarcodeInput");
+    const unitsInput = document.getElementById("unitsInput");
+    const saveBtn = document.getElementById("saveBtn");
+    const statusBox = document.getElementById("statusBox");
+    let qrScanner = null;
+
+    saveBtn.addEventListener("click", function() {
+        const carton = cartonInput.value.trim();
+        const units = unitsInput.value.trim();
+
+        if (!carton) {
+            statusBox.innerHTML = '<span class="text-red-600">Carton barcode is required.</span>';
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("csrfmiddlewaretoken", "{{ csrf_token }}");
+        formData.append("unit_barcode", unitBarcode);
+        formData.append("carton_barcode", carton);
+        formData.append("units_per_carton", units);
+
+        fetch("{% url 'packaging:save_carton_api' %}", {
+            method: "POST",
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                statusBox.innerHTML =
+                    '<span class="text-green-600 font-semibold">Mapping saved!</span>';
+            } else {
+                statusBox.innerHTML =
+                    '<span class="text-red-600">Error: ' + (data.message || 'Unknown') + '</span>';
+            }
+        })
+        .catch(err => {
+            statusBox.innerHTML = '<span class="text-red-600">Error: ' + err + '</span>';
+        });
+    });
+
+    const startBtn = document.getElementById("startCameraBtn");
+    startBtn.addEventListener("click", function() {
+        if (qrScanner) return;
+        qrScanner = new Html5Qrcode("reader");
+        qrScanner.start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: 250 },
+            decodedText => {
+                cartonInput.value = decodedText;
+            }
+        );
+    });
+})();
+</script>
+{% endblock %}

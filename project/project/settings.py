@@ -47,6 +47,7 @@ INSTALLED_APPS = [
 'Inventory',
     'users',
 'sslserver',
+    'order',
 
 'rest_framework',
     # 'account',

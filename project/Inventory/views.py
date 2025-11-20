@@ -13,6 +13,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from order.models import ProductPackaging
 from pricing.models import CompetitorPrice, WastageRecord, DiscountedSale
 from product_price import models
 from .tasks import scrape_product_task  # Correctly import the Celery task
@@ -885,112 +886,328 @@ import logging  # Import the logging library
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
 
+# @api_view(['POST'])
+# @permission_classes([IsAuthenticated])
+# def scan_api(request):
+#     """
+#     Handles all core scanning, manual lookup, and inventory modification actions.
+#     """
+#     mode = request.data.get('mode')
+#     supermarket_id = request.data.get('supermarket_id')
+#     if not all([mode, supermarket_id]):
+#         return Response({'error': 'Mode and supermarket_id required.'}, status=400)
+#
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#
+#     if mode == 'lookup':
+#         barcode = request.data.get('barcode')
+#         if not barcode:
+#             return Response({'error': 'Barcode required.'}, status=400)
+#         try:
+#             product, created = Product.objects.get_or_create(barcode=barcode, defaults={'name': f'Product {barcode}'})
+#             # --- ✅ Scrape new fields ---
+#             if (created or not product.name or product.name.startswith("Product ")) and not product.cover_image:
+#                 try:
+#                     product_info = get_product_info_cascade(barcode)
+#                     if product_info and product_info.get('name'):
+#                         product.name = product_info.get('name')
+#                         product.brand = product_info.get('brand')
+#                         product.image_url = product_info.get('image_url')
+#                         product.quantity = product_info.get('quantity')  # Scrape package size
+#                         product.nutriscore_grade = product_info.get('nutriscore_grade')  # Scrape Nutri-Score
+#                         product.save()
+#                 except Exception as e:
+#                     logger.warning(f"Scraping failed for {barcode}: {e}")
+#
+#             existing_items = InventoryItem.objects.filter(supermarket=supermarket, product=product).select_related(
+#                 'rack').order_by('expiry_date')
+#             categories = list(Category.objects.values('id', 'name'))
+#
+#             # --- ✅ AUTO-FETCH ALL DEFAULTS ---
+#             default_price = None
+#             default_category_id = product.category_id  # Fallback to product's category
+#             default_rack_id = None
+#             try:
+#                 defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+#                 default_price = defaults_entry.price
+#                 if defaults_entry.default_category_id:
+#                     default_category_id = defaults_entry.default_category_id
+#                 if defaults_entry.default_rack_id:
+#                     default_rack_id = defaults_entry.default_rack_id
+#             except ProductPrice.DoesNotExist:
+#                 pass
+#             return Response({
+#                 'product': {
+#                     'barcode': product.barcode, 'name': product.name, 'brand': product.brand,
+#                     'image_url': product.display_image_url,
+#                     'default_store_price': default_price,
+#                     'category_id': default_category_id,  # Send the smart default
+#                     'default_rack_id': default_rack_id,  # Send the smart default
+#                 },
+#                 'existing_items': [
+#                     {'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date, 'rack_id': item.rack_id,
+#                      'rack_name': item.rack.name if item.rack else None, 'store_price': item.store_price} for item in
+#                     existing_items],
+#                 'categories': categories
+#             })
+#         except Exception as e:
+#             logger.error(f"Error in scan_api lookup: {e}", exc_info=True)
+#             return Response({'error': 'An internal server error occurred.'}, status=500)
+#
+#     elif mode == 'add':
+#         data = request.data
+#         try:
+#             product = get_object_or_404(Product, barcode=data.get('barcode'))
+#
+#             # --- 1. Get explicit choices from the form ---
+#             form_category_id = data.get('category_id') or None
+#             form_rack_id = data.get('rack_id') or None
+#             form_price_str = data.get('store_price')
+#             form_store_price = form_price_str if form_price_str and form_price_str.strip() else None
+#             form_manufacture_date = data.get('manufacture_date') or None
+#             form_expiry_date = data.get('expiry_date')
+#             form_quantity = int(data.get('quantity', 1))
+#
+#             if not form_expiry_date:
+#                 return Response({'error': 'Expiry date is required.'}, status=400)
+#             # --- 2. Initialize final values ---
+#             final_category_id = form_category_id
+#             final_rack_id = form_rack_id
+#             final_store_price = form_store_price
+#
+#             # --- 3. AUTO-FETCH DEFAULTS ---
+#             try:
+#                 defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+#                 if final_store_price is None:
+#                     final_store_price = defaults_entry.price
+#                 if final_category_id is None:
+#                     final_category_id = defaults_entry.default_category_id
+#                 if final_rack_id is None:
+#                     final_rack_id = defaults_entry.default_rack_id
+#             except ProductPrice.DoesNotExist:
+#                 pass  # No defaults, just use form values
+#
+#             # --- 4. Fallback for Category ---
+#             if final_category_id is None and product.category_id:
+#                 final_category_id = product.category_id
+#
+#             # --- 5. Create or Update Logic ---
+#             item, created = InventoryItem.objects.get_or_create(
+#                 supermarket=supermarket,
+#                 product=product,
+#                 expiry_date=form_expiry_date,
+#                 store_price=final_store_price,
+#                 rack_id=final_rack_id,
+#                 category_id=final_category_id,
+#                 manufacture_date=form_manufacture_date,
+#                 defaults={'quantity': form_quantity}
+#             )
+#             if not created:
+#                 item.quantity = F('quantity') + form_quantity
+#                 item.save()
+#                 return Response({'message': 'Updated quantity for existing batch.'}, status=200)
+#             else:
+#                 return Response({'message': f'New batch of {product.name} added.'}, status=201)
+#
+#         except IntegrityError:
+#             return Response({'error': 'A batch with these exact details already exists.'}, status=400)
+#         except Exception as e:
+#             logger.error(f"Error in scan_api add mode: {e}", exc_info=True)
+#             return Response({'error': f'An error occurred: {e}'}, status=400)
+#
+#     elif mode == 'remove':
+#         try:
+#             item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
+#             item.delete()
+#             return Response({'message': 'Batch removed.'})
+#         except Exception as e:
+#             logger.error(f"Error removing item: {e}", exc_info=True)
+#             return Response({'error': 'Failed to remove item.'}, status=500)
+#
+#     return Response({'error': 'Invalid mode.'}, status=400)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def scan_api(request):
     """
-    Handles all core scanning, manual lookup, and inventory modification actions.
+    Handles all scanning:
+    - UNIT barcode → normal behavior
+    - CARTON barcode → quantity * units_per_carton
+    - Manual input works as before
     """
     mode = request.data.get('mode')
     supermarket_id = request.data.get('supermarket_id')
+
     if not all([mode, supermarket_id]):
         return Response({'error': 'Mode and supermarket_id required.'}, status=400)
 
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
 
+    # ======================================================
+    # 🔵 MODE: LOOKUP
+    # ======================================================
     if mode == 'lookup':
         barcode = request.data.get('barcode')
+
         if not barcode:
             return Response({'error': 'Barcode required.'}, status=400)
+
+        # --------------------------------------------------
+        # 🟦 1. Detect if scanned barcode = UNIT or CARTON
+        # --------------------------------------------------
+        packaging = ProductPackaging.objects.filter(
+            Q(unit_barcode=barcode) | Q(carton_barcode=barcode)
+        ).first()
+
+        is_carton = False
+        carton_units = 1
+
+        if packaging:
+            if packaging.carton_barcode and barcode == packaging.carton_barcode:
+                # CARTON detected
+                is_carton = True
+                carton_units = packaging.units_per_carton or 1
+
+        # --------------------------------------------------
+        # 🟦 2. Lookup always uses the UNIT barcode
+        # --------------------------------------------------
+        lookup_barcode = (
+            packaging.unit_barcode if (is_carton and packaging) else barcode
+        )
+
+        # --------------------------------------------------
+        # 🟦 3. Fetch or create product using UNIT barcode
+        # --------------------------------------------------
         try:
-            product, created = Product.objects.get_or_create(barcode=barcode, defaults={'name': f'Product {barcode}'})
-            # --- ✅ Scrape new fields ---
+            product, created = Product.objects.get_or_create(
+                barcode=lookup_barcode,
+                defaults={'name': f'Product {lookup_barcode}'}
+            )
+
+            # Auto-scrape if needed
             if (created or not product.name or product.name.startswith("Product ")) and not product.cover_image:
                 try:
-                    product_info = get_product_info_cascade(barcode)
-                    if product_info and product_info.get('name'):
-                        product.name = product_info.get('name')
-                        product.brand = product_info.get('brand')
-                        product.image_url = product_info.get('image_url')
-                        product.quantity = product_info.get('quantity')  # Scrape package size
-                        product.nutriscore_grade = product_info.get('nutriscore_grade')  # Scrape Nutri-Score
+                    info = get_product_info_cascade(lookup_barcode)
+                    if info:
+                        product.name = info.get('name', product.name)
+                        product.brand = info.get('brand')
+                        product.image_url = info.get('image_url')
+                        product.quantity = info.get('quantity')
+                        product.nutriscore_grade = info.get('nutriscore_grade')
                         product.save()
                 except Exception as e:
-                    logger.warning(f"Scraping failed for {barcode}: {e}")
+                    logger.warning(f"Scraping failed for {lookup_barcode}: {e}")
 
-            existing_items = InventoryItem.objects.filter(supermarket=supermarket, product=product).select_related(
-                'rack').order_by('expiry_date')
+            # Fetch existing inventory
+            existing_items = InventoryItem.objects.filter(
+                supermarket=supermarket, product=product
+            ).select_related('rack').order_by('expiry_date')
+
             categories = list(Category.objects.values('id', 'name'))
 
-            # --- ✅ AUTO-FETCH ALL DEFAULTS ---
+            # --------------------------------------------------
+            # 🟦 4. Fetch smart defaults (price, category, rack)
+            # --------------------------------------------------
             default_price = None
-            default_category_id = product.category_id  # Fallback to product's category
+            default_category_id = product.category_id
             default_rack_id = None
+
             try:
-                defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
-                default_price = defaults_entry.price
-                if defaults_entry.default_category_id:
-                    default_category_id = defaults_entry.default_category_id
-                if defaults_entry.default_rack_id:
-                    default_rack_id = defaults_entry.default_rack_id
+                defaults = ProductPrice.objects.get(supermarket=supermarket, product=product)
+                default_price = defaults.price
+                if defaults.default_category_id:
+                    default_category_id = defaults.default_category_id
+                if defaults.default_rack_id:
+                    default_rack_id = defaults.default_rack_id
             except ProductPrice.DoesNotExist:
                 pass
+
+            # --------------------------------------------------
+            # 🟦 5. Send full response (includes carton info)
+            # --------------------------------------------------
             return Response({
                 'product': {
-                    'barcode': product.barcode, 'name': product.name, 'brand': product.brand,
+                    'barcode': product.barcode,
+                    'name': product.name,
+                    'brand': product.brand,
                     'image_url': product.display_image_url,
                     'default_store_price': default_price,
-                    'category_id': default_category_id,  # Send the smart default
-                    'default_rack_id': default_rack_id,  # Send the smart default
+                    'category_id': default_category_id,
+                    'default_rack_id': default_rack_id,
                 },
                 'existing_items': [
-                    {'id': item.id, 'quantity': item.quantity, 'expiry_date': item.expiry_date, 'rack_id': item.rack_id,
-                     'rack_name': item.rack.name if item.rack else None, 'store_price': item.store_price} for item in
-                    existing_items],
-                'categories': categories
+                    {
+                        'id': item.id,
+                        'quantity': item.quantity,
+                        'expiry_date': item.expiry_date,
+                        'rack_id': item.rack_id,
+                        'rack_name': item.rack.name if item.rack else None,
+                        'store_price': item.store_price,
+                    } for item in existing_items
+                ],
+                'categories': categories,
+                'carton_info': {
+                    'is_carton': is_carton,
+                    'carton_units': carton_units,
+                }
             })
-        except Exception as e:
-            logger.error(f"Error in scan_api lookup: {e}", exc_info=True)
-            return Response({'error': 'An internal server error occurred.'}, status=500)
 
+        except Exception as e:
+            logger.error(f"Lookup error: {e}", exc_info=True)
+            return Response({'error': 'Internal server error.'}, status=500)
+
+    # ======================================================
+    # 🔵 MODE: ADD
+    # ======================================================
     elif mode == 'add':
         data = request.data
+
         try:
             product = get_object_or_404(Product, barcode=data.get('barcode'))
+            form_quantity = int(data.get('quantity', 1))
 
-            # --- 1. Get explicit choices from the form ---
+            # --------------------------------------------------
+            # 🟦 Detect carton → auto-multiply quantity
+            # --------------------------------------------------
+            packaging = ProductPackaging.objects.filter(
+                Q(unit_barcode=data.get('barcode')) | Q(carton_barcode=data.get('barcode'))
+            ).first()
+
+            if packaging and packaging.carton_barcode == data.get('barcode'):
+                form_quantity = form_quantity * (packaging.units_per_carton or 1)
+
+            # Collect form values
             form_category_id = data.get('category_id') or None
             form_rack_id = data.get('rack_id') or None
             form_price_str = data.get('store_price')
-            form_store_price = form_price_str if form_price_str and form_price_str.strip() else None
-            form_manufacture_date = data.get('manufacture_date') or None
+            form_store_price = form_price_str.strip() if form_price_str else None
             form_expiry_date = data.get('expiry_date')
-            form_quantity = int(data.get('quantity', 1))
 
             if not form_expiry_date:
-                return Response({'error': 'Expiry date is required.'}, status=400)
-            # --- 2. Initialize final values ---
+                return Response({'error': 'Expiry date required.'}, status=400)
+
+            # Defaults
             final_category_id = form_category_id
             final_rack_id = form_rack_id
             final_store_price = form_store_price
 
-            # --- 3. AUTO-FETCH DEFAULTS ---
             try:
-                defaults_entry = ProductPrice.objects.get(supermarket=supermarket, product=product)
+                defaults = ProductPrice.objects.get(supermarket=supermarket, product=product)
                 if final_store_price is None:
-                    final_store_price = defaults_entry.price
+                    final_store_price = defaults.price
                 if final_category_id is None:
-                    final_category_id = defaults_entry.default_category_id
+                    final_category_id = defaults.default_category_id
                 if final_rack_id is None:
-                    final_rack_id = defaults_entry.default_rack_id
+                    final_rack_id = defaults.default_rack_id
             except ProductPrice.DoesNotExist:
-                pass  # No defaults, just use form values
+                pass
 
-            # --- 4. Fallback for Category ---
+            # Fallback
             if final_category_id is None and product.category_id:
                 final_category_id = product.category_id
 
-            # --- 5. Create or Update Logic ---
+            # Create or add stock
             item, created = InventoryItem.objects.get_or_create(
                 supermarket=supermarket,
                 product=product,
@@ -998,32 +1215,43 @@ def scan_api(request):
                 store_price=final_store_price,
                 rack_id=final_rack_id,
                 category_id=final_category_id,
-                manufacture_date=form_manufacture_date,
                 defaults={'quantity': form_quantity}
             )
+
             if not created:
                 item.quantity = F('quantity') + form_quantity
                 item.save()
-                return Response({'message': 'Updated quantity for existing batch.'}, status=200)
-            else:
-                return Response({'message': f'New batch of {product.name} added.'}, status=201)
+                return Response({'message': 'Updated quantity for existing batch.'})
+
+            return Response({'message': f'New batch of {product.name} added.'}, status=201)
 
         except IntegrityError:
-            return Response({'error': 'A batch with these exact details already exists.'}, status=400)
+            return Response({'error': 'Duplicate batch exists.'}, status=400)
         except Exception as e:
-            logger.error(f"Error in scan_api add mode: {e}", exc_info=True)
-            return Response({'error': f'An error occurred: {e}'}, status=400)
+            logger.error(f"Add mode error: {e}", exc_info=True)
+            return Response({'error': f'Error: {e}'}, status=400)
 
+    # ======================================================
+    # 🔵 MODE: REMOVE
+    # ======================================================
     elif mode == 'remove':
         try:
-            item = get_object_or_404(InventoryItem, pk=request.data.get('inventory_item_id'), supermarket=supermarket)
+            item = get_object_or_404(
+                InventoryItem,
+                pk=request.data.get('inventory_item_id'),
+                supermarket=supermarket
+            )
             item.delete()
             return Response({'message': 'Batch removed.'})
         except Exception as e:
-            logger.error(f"Error removing item: {e}", exc_info=True)
+            logger.error(f"Remove error: {e}", exc_info=True)
             return Response({'error': 'Failed to remove item.'}, status=500)
 
     return Response({'error': 'Invalid mode.'}, status=400)
+
+
+
+
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
