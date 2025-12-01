@@ -3,191 +3,174 @@
 {% block header %}Order Builder{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6">
+<div class="mx-auto max-w-3xl space-y-6">
 
-    <!-- ========================================= -->
-    <!-- TOP BAR -->
-    <!-- ========================================= -->
-    <div class="bg-white rounded-xl shadow p-5">
-        <form method="POST" class="space-y-4">
-            {% csrf_token %}
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <!-- 🟢 STEP 1: SCANNER UI -->
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="bg-green-600 text-white w-7 h-7 flex items-center justify-center rounded-full">1</span>
+            <h2 class="font-bold text-lg text-gray-800">Scan Products</h2>
+        </div>
 
-                <!-- Supplier -->
-                <div>
-                    <label class="text-sm font-semibold text-gray-700">Supplier</label>
-                    <select name="supplier_id" class="w-full mt-1 border rounded-lg px-3 py-2 text-sm">
-                        <option value="">-- Select --</option>
-                        {% for s in suppliers %}
-                            <option value="{{ s.id }}"
-                                {% if batch.supplier and batch.supplier.id == s.id %}selected{% endif %}>
-                                {{ s.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
+        <!-- Camera -->
+        <div id="scannerBox" class="w-full h-64 bg-black rounded-xl overflow-hidden flex relative justify-center items-center">
+            <div id="qr-reader" class="w-full h-full text-white"></div>
 
-                <!-- Reference -->
-                <div>
-                    <label class="text-sm font-semibold text-gray-700">Reference</label>
-                    <input type="text" name="reference" value="{{ batch.reference }}"
-                           class="w-full mt-1 border rounded-lg px-3 py-2 text-sm"
-                           placeholder="Optional">
-                </div>
-
-                <!-- PDF -->
-                <div class="flex items-end">
-                    <button type="submit" name="finalize"
-                        class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-semibold text-sm">
-                        📄 Save & PDF
-                    </button>
-                </div>
-            </div>
-
-            <div class="flex justify-between text-xs mt-2">
-                <a href="{% url 'packaging:reset_order_batch' supermarket.id %}" class="text-red-500 hover:underline">
-                    Reset Order
-                </a>
-                <span class="text-gray-500">Status: <b>{{ batch.get_status_display }}</b></span>
-            </div>
-        </form>
-    </div>
-
-    <!-- ========================================= -->
-    <!-- SCAN SECTION -->
-    <!-- ========================================= -->
-    <div class="bg-white rounded-xl shadow p-5 space-y-4">
-        <h2 class="text-lg font-semibold flex items-center gap-2">
-            <span class="w-8 h-8 flex items-center justify-center bg-green-100 text-green-700 rounded-full">1</span>
-            Scan Products
-        </h2>
-
-        <div id="scannerBox"
-             class="relative w-full h-72 bg-black rounded-xl overflow-hidden flex items-center justify-center">
-            <div id="qr-reader" class="w-full h-full"></div>
             <button id="startScanBtn"
-                    class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-60 text-white text-xl font-semibold">
+                    class="absolute inset-0 flex flex-col justify-center items-center text-white bg-black bg-opacity-80 text-lg font-medium">
                 📷 Tap to Start Scanner
-                <span class="text-sm mt-2">Use back camera</span>
+                <span class="text-xs opacity-70">Use Rear Camera</span>
             </button>
         </div>
 
-        <p id="scanStatus" class="text-center text-sm text-gray-600 mt-2"></p>
+        <p id="scanStatus" class="text-center text-gray-600 text-sm mt-2"></p>
 
-        <!-- manual -->
-        <form method="POST" class="flex gap-2 mt-3">
+        <!-- Manual Input -->
+        <form method="POST" class="flex gap-2 mt-4">
             {% csrf_token %}
-            <input type="text" name="barcode" class="flex-1 border rounded-lg px-3 py-2 text-sm"
-                   placeholder="Or enter barcode manually">
+            <input type="text" name="barcode"
+                   placeholder="Enter barcode manually"
+                   class="flex-1 border rounded-lg px-3 py-2 text-sm">
             <button type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">
+                    class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
                 Add
             </button>
         </form>
     </div>
 
-    <!-- ========================================= -->
-    <!-- ORDER LINES -->
-    <!-- ========================================= -->
-    <div class="bg-white rounded-xl shadow p-5">
-        <h2 class="text-lg font-semibold mb-2 flex items-center gap-2">
-            <span class="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-700 rounded-full">2</span>
-            Your Order
-        </h2>
 
-        {% if batch.lines.count %}
-        <div class="overflow-x-auto mt-3">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-100">
-                    <tr>
-                        <th class="px-3 py-2 text-left font-semibold">Product</th>
-                        <th class="px-3 py-2 text-left font-semibold">EAN</th>
-                        <th class="px-3 py-2 text-left font-semibold">Carton</th>
-                        <th class="px-3 py-2 text-right font-semibold">Cartons</th>
-                        <th class="px-3 py-2 text-right font-semibold">Units/Carton</th>
-                        <th class="px-3 py-2 text-right font-semibold">Total</th>
-                        <th class="px-3 py-2 text-right font-semibold">Action</th>
-                    </tr>
-                </thead>
+    <!-- 🟠 STEP 2: SUPPLIER + FINALIZE -->
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="bg-blue-600 text-white w-7 h-7 flex items-center justify-center rounded-full">2</span>
+            <h2 class="font-bold text-lg text-gray-800">Order Details</h2>
+        </div>
 
-                <tbody>
-                    {% for line in batch.lines.all %}
-                    <tr class="border-t">
-                        <td class="px-3 py-2">
-                            <div class="font-medium">{{ line.product.name }}</div>
-                            <div class="text-xs text-gray-500">{{ line.product.brand }}</div>
-                        </td>
+        <form method="POST" class="space-y-4">
+            {% csrf_token %}
 
-                        <td class="px-3 py-2 font-mono text-xs">{{ line.unit_barcode }}</td>
-                        <td class="px-3 py-2 font-mono text-xs">{{ line.carton_barcode|default:"-" }}</td>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="text-sm font-semibold">Supplier</label>
+                    <select name="supplier_id" class="mt-1 w-full border px-3 py-2 rounded-lg text-sm">
+                        <option value="">— select —</option>
+                        {% for s in suppliers %}
+                        <option value="{{ s.id }}"
+                          {% if batch.supplier and batch.supplier.id == s.id %}selected{% endif %}>
+                          {{ s.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
-                        <!-- Editable quantity -->
-                        <td class="px-3 py-2 text-right">
-                            <form method="POST"
-                                  action="{% url 'packaging:update_order_line' supermarket.id line.id %}"
-                                  class="inline-flex items-center gap-1">
-                                {% csrf_token %}
-                                <input type="number" name="cartons"
-                                       value="{{ line.cartons }}"
-                                       min="1"
-                                       class="w-16 border rounded px-2 py-1 text-right text-sm">
-                                <button class="text-blue-600 hover:text-blue-800 text-lg">✔</button>
-                            </form>
-                        </td>
+                <div>
+                    <label class="text-sm font-semibold">Reference Note</label>
+                    <input type="text"
+                           name="reference"
+                           value="{{ batch.reference }}"
+                           class="mt-1 w-full border px-3 py-2 rounded-lg text-sm"
+                           placeholder="(optional)">
+                </div>
+            </div>
 
-                        <td class="px-3 py-2 text-right">{{ line.units_per_carton|default:"-" }}</td>
-                        <td class="px-3 py-2 text-right font-semibold">{{ line.total_units }}</td>
+            <button type="submit" name="finalize"
+                    class="w-full py-2 bg-green-600 text-white font-semibold rounded-lg">
+                📦 Save & Download Order PDF
+            </button>
+        </form>
 
-                        <!-- delete -->
-                        <td class="px-3 py-2 text-right">
-                            <a href="{% url 'packaging:delete_order_line' supermarket.id line.id %}"
-                               class="text-red-600 text-lg hover:text-red-800"
-                               onclick="return confirm('Remove this item?');">
-                                🗑
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="flex justify-between text-xs mt-3">
+            <span class="text-gray-600">Status: <b>{{ batch.get_status_display }}</b></span>
+            <a href="{% url 'packaging:reset_order_batch' supermarket.id %}"
+               class="text-red-500 underline">
+                Reset
+            </a>
+        </div>
+    </div>
+
+
+    <!-- 🔵 STEP 3: ORDER LIST -->
+    <div class="bg-white rounded-2xl shadow-md p-5">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="bg-indigo-600 text-white w-7 h-7 flex items-center justify-center rounded-full">3</span>
+            <h2 class="font-bold text-lg text-gray-800">Current Order</h2>
+        </div>
+
+        {% if lines %}
+        <div class="space-y-3">
+            {% for line in lines %}
+            <div class="p-3 border rounded-lg flex items-center justify-between">
+
+                <!-- LEFT -->
+                <div class="flex flex-col">
+                    <span class="font-semibold text-gray-900">{{ line.product.name }}</span>
+                    <span class="text-xs text-gray-500">EAN: {{ line.unit_barcode }}</span>
+                    <span class="text-xs text-gray-400">
+                        Carton: {{ line.carton_barcode|default:"—" }}
+                    </span>
+                </div>
+
+                <!-- QTY CONTROL -->
+                <div class="flex items-center gap-2">
+                    <form action="{% url 'packaging:update_order_line' supermarket.id line.id %}"
+                          method="POST">
+                        {% csrf_token %}
+                        <input type="number" name="cartons"
+                               value="{{ line.cartons }}"
+                               min="1"
+                               class="w-14 border rounded-lg text-center text-sm">
+                        <button class="text-blue-600 text-xs mt-1">OK</button>
+                    </form>
+
+                    <form action="{% url 'packaging:delete_order_line' supermarket.id line.id %}"
+                          method="POST">
+                        {% csrf_token %}
+                        <button class="text-red-500 text-sm"
+                                onclick="return confirm('Remove?')">
+                            ✕
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+            {% endfor %}
         </div>
 
         {% else %}
-        <p class="text-gray-500 text-sm mt-3">No items yet. Start scanning.</p>
+        <p class="text-gray-500 text-center text-sm mt-4">
+            Scan a product to begin.
+        </p>
         {% endif %}
     </div>
 </div>
 {% endblock %}
 
+
 {% block extra_js %}
 <script src="https://unpkg.com/html5-qrcode"></script>
-
 <script>
-const startBtn = document.getElementById("startScanBtn");
 const scanStatus = document.getElementById("scanStatus");
+const startBtn = document.getElementById("startScanBtn");
 let scanner = null;
 
 startBtn.addEventListener("click", () => {
     if (scanner) return;
-
     startBtn.classList.add("hidden");
-    scanStatus.textContent = "Starting camera…";
 
     scanner = new Html5Qrcode("qr-reader");
 
     scanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
+        { fps: 12, qrbox: { width: 260, height: 260 } },
         (barcode) => {
-            if (navigator.vibrate) navigator.vibrate(80);
-
-            scanStatus.textContent = "Scanned " + barcode;
+            scanStatus.textContent = "Scanned: " + barcode;
+            if (navigator.vibrate) navigator.vibrate(60);
 
             fetch("{% url 'packaging:add_scanned_item' supermarket.id %}", {
                 method: "POST",
                 headers: {
+                    "X-CSRFToken": "{{ csrf_token }}",
                     "Content-Type": "application/json",
-                    "X-CSRFToken": "{{ csrf_token }}"
                 },
                 body: JSON.stringify({ barcode })
             }).then(() => window.location.reload());

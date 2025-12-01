@@ -52,30 +52,86 @@ class PricingRule(models.Model):
         return f"{self.name} for {self.supermarket.name}"
 
 
+# class Promotion(models.Model):
+#     """
+#     Manages special sales events and promotions.
+#     """
+#
+#     class DiscountType(models.TextChoices):
+#         PERCENTAGE = 'PERCENTAGE', 'Percentage Off'
+#         FIXED_AMOUNT = 'FIXED_AMOUNT', 'Fixed Amount Off'
+#
+#     supermarket = models.ForeignKey(Supermarket, on_delete=models.CASCADE, related_name='promotions')
+#     name = models.CharField(max_length=255)
+#     start_date = models.DateTimeField()
+#     end_date = models.DateTimeField()
+#     discount_type = models.CharField(max_length=20, choices=DiscountType.choices)
+#     discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+#
+#     # Apply promotion to specific products or whole categories
+#     products = models.ManyToManyField(Product, blank=True, related_name='promotions')
+#     categories = models.ManyToManyField(Category, blank=True, related_name='promotions')
+#
+#     is_active = models.BooleanField(default=True)
+#
+#     def __str__(self):
+#         return f"{self.name} ({self.start_date.date()} to {self.end_date.date()})"
+
 class Promotion(models.Model):
     """
-    Manages special sales events and promotions.
+    Handles all promotion types:
+    - Percentage (-20%)
+    - Fixed amount (-1.50€)
+    - BOGO (Buy X Get Y free)
+    - Multi-pack (X for Y price)
     """
 
     class DiscountType(models.TextChoices):
         PERCENTAGE = 'PERCENTAGE', 'Percentage Off'
         FIXED_AMOUNT = 'FIXED_AMOUNT', 'Fixed Amount Off'
+        BOGO = 'BOGO', 'Buy X Get Y Free'
+        MULTIPACK = 'MULTIPACK', 'Bundle Price (X for Y)'
 
-    supermarket = models.ForeignKey(Supermarket, on_delete=models.CASCADE, related_name='promotions')
+    supermarket = models.ForeignKey(
+        Supermarket,
+        on_delete=models.CASCADE,
+        related_name='promotions'
+    )
+
     name = models.CharField(max_length=255)
     start_date = models.DateTimeField()
     end_date = models.DateTimeField()
-    discount_type = models.CharField(max_length=20, choices=DiscountType.choices)
-    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
 
-    # Apply promotion to specific products or whole categories
+    discount_type = models.CharField(max_length=20, choices=DiscountType.choices)
+
+    # % or -€
+    discount_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Used for percentage or fixed amount discounts"
+    )
+
+    # BOGO: buy X get Y
+    buy_qty = models.PositiveIntegerField(null=True, blank=True)
+    free_qty = models.PositiveIntegerField(null=True, blank=True)
+
+    # MULTIPACK: X items for Y price
+    pack_qty = models.PositiveIntegerField(null=True, blank=True)
+    pack_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # Applied to specific
     products = models.ManyToManyField(Product, blank=True, related_name='promotions')
     categories = models.ManyToManyField(Category, blank=True, related_name='promotions')
 
     is_active = models.BooleanField(default=True)
 
+    class Meta:
+        ordering = ['-start_date']
+
     def __str__(self):
-        return f"{self.name} ({self.start_date.date()} to {self.end_date.date()})"
+        return f"{self.name} ({self.start_date.date()} - {self.end_date.date()})"
 
 
 # ... (existing imports and models: CompetitorPrice, PricingRule, Promotion, Advertisement) ...

@@ -5,27 +5,21 @@
 {% block content %}
 <div class="max-w-lg mx-auto space-y-6">
 
-    <!-- =============================== -->
-    <!-- Intro Card -->
-    <!-- =============================== -->
+    <!-- Intro -->
     <div class="bg-white rounded-xl shadow p-6">
         <h2 class="text-xl font-bold text-gray-800 mb-1">Step 1: Scan the Unit Barcode</h2>
         <p class="text-sm text-gray-600">
             Scan the <strong>consumer unit (CU)</strong> barcode printed on the retail label.
-            If carton packaging is missing, you will be guided to scan the carton.
+            If carton packaging is missing, a superadmin can map it.
         </p>
     </div>
 
-    <!-- =============================== -->
-    <!-- Scanner Area (Mobile Priority) -->
-    <!-- =============================== -->
+    <!-- Scanner Area -->
     <div class="bg-white rounded-xl shadow p-6 space-y-4">
 
-        <!-- Scanner Box -->
         <div id="scannerBox" class="relative w-full h-72 bg-black rounded-xl overflow-hidden flex items-center justify-center">
             <div id="reader" class="w-full h-full text-white flex items-center justify-center"></div>
 
-            <!-- Start overlay -->
             <button id="startCameraBtn"
                 class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 text-white text-xl font-semibold rounded-xl">
                 📷 Tap to Start Scanner
@@ -58,10 +52,8 @@
 </div>
 {% endblock %}
 
-
 {% block extra_js %}
 <script src="https://unpkg.com/html5-qrcode"></script>
-
 <script>
 (function() {
     const form = document.getElementById("unitForm");
@@ -69,23 +61,15 @@
     const statusBox = document.getElementById("statusBox");
     const mappingInfo = document.getElementById("mappingInfo");
     const startBtn = document.getElementById("startCameraBtn");
-
     let scanner = null;
 
-    // ================================
-    // Manual form submit
-    // ================================
     form.addEventListener("submit", function(e) {
         e.preventDefault();
         const barcode = input.value.trim();
         if (!barcode) return;
-
         checkUnitBarcode(barcode);
     });
 
-    // ================================
-    // API request function
-    // ================================
     function checkUnitBarcode(barcode) {
         statusBox.textContent = "Checking…";
 
@@ -100,54 +84,54 @@
         .then(res => res.json())
         .then(data => handleResponse(data, barcode))
         .catch(err => {
-            statusBox.innerHTML = `<span class='text-red-600'>Error: ${err}</span>`;
+            statusBox.innerHTML = "<span class='text-red-600'>Error: " + err + "</span>";
         });
     }
 
-    // ================================
-    // Response handler
-    // ================================
     function handleResponse(data, barcode) {
         mappingInfo.classList.add("hidden");
+        mappingInfo.innerHTML = "";
 
         if (data.status === "not_found") {
             statusBox.innerHTML =
-                `<span class='text-red-600 font-semibold'>
-                    No product found. Add product first in Product Catalog.
-                </span>`;
+                "<span class='text-red-600 font-semibold'>No product found. Add product first in Product Catalog.</span>";
             return;
         }
 
         if (data.status === "carton_exists") {
             statusBox.innerHTML =
-                `<span class='text-green-600 font-semibold'>Packaging mapped ✔</span>`;
+                "<span class='text-green-600 font-semibold'>Packaging mapped ✔</span>";
             mappingInfo.classList.remove("hidden");
-            mappingInfo.innerHTML = `
-                <p><strong>Product:</strong> ${data.product_name}</p>
-                <p><strong>Unit Barcode:</strong> ${data.unit_barcode}</p>
-                <p><strong>Carton Barcode:</strong> ${data.carton_barcode}</p>
-                <p><strong>Units per carton:</strong> ${data.units_per_carton}</p>
-            `;
+
+            let html = `<p><strong>Product:</strong> ${data.product_name}</p>
+                        <p><strong>Unit Barcode:</strong> ${data.unit_barcode}</p>`;
+
+            if (data.options && data.options.length) {
+                html += "<p class='mt-2 font-semibold'>Available carton options:</p><ul class='list-disc pl-5 mt-1'>";
+                data.options.forEach(o => {
+                    html += `<li>${o.units_per_carton} units · Carton: ${o.carton_barcode}</li>`;
+                });
+                html += "</ul>";
+            }
+            mappingInfo.innerHTML = html;
             return;
         }
 
         if (data.status === "need_carton") {
             statusBox.innerHTML =
-                `<span class='text-orange-600 font-semibold'>
-                    No carton mapping yet. Redirecting to carton scanner…
-                </span>`;
-
+                "<span class='text-orange-600 font-semibold'>No carton mapping yet. Ask a superadmin to configure it.</span>";
+            // Optionally auto-redirect superadmin:
+            {% if user.is_superuser or user.is_superadmin %}
             setTimeout(() => {
                 window.location.href =
-                    "{% url 'packaging:scan_carton' 'CU_PLACEHOLDER' %}"
+                    "{% url 'packaging:scan_carton' supermarket.id 'CU_PLACEHOLDER' %}"
                     .replace("CU_PLACEHOLDER", barcode);
-            }, 600);
+            }, 700);
+            {% endif %}
         }
     }
 
-    // ================================
     // Camera Scanner
-    // ================================
     startBtn.addEventListener("click", function() {
         if (scanner) return;
 
@@ -160,9 +144,7 @@
             { facingMode: "environment" },
             { fps: 10, qrbox: 250 },
             (decodedText) => {
-                // Vibrate for better UX
                 if (navigator.vibrate) navigator.vibrate(70);
-
                 input.value = decodedText;
                 checkUnitBarcode(decodedText);
             }

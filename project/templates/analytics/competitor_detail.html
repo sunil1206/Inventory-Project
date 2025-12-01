@@ -1,0 +1,29 @@
+{% extends "inventory/base.html" %}
+{% block title %}Competitor Analytics{% endblock %}
+{% block header %}Competitor Analytics{% endblock %}
+
+{% block content %}
+<div class="bg-white p-4 rounded-xl shadow">
+    <h3 class="font-semibold mb-3 text-gray-800">Recent Competitor Prices</h3>
+    <div class="divide-y text-sm">
+        {% for row in competitors %}
+            <div class="py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                <div class="flex-1">
+                    <p class="font-medium">{{ row.product.name }}</p>
+                    <p class="text-xs text-gray-500">{{ row.competitor.name }}</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-green-600">€{{ row.price }}</p>
+                    {% if row.product_url %}
+                        <a href="{{ row.product_url }}" target="_blank" class="text-xs text-blue-500 underline">
+                            View product
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+        {% empty %}
+            <p class="py-4 text-center text-gray-500">No competitor data found.</p>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -659,17 +659,64 @@ def staff_management_view(request, supermarket_id):
         return redirect('inventory:staff_management', supermarket_id=supermarket.id)
     staff = supermarket.staff_members.all().select_related('user')
     return render(request, 'inventory/management/staff_management.html', {'supermarket': supermarket, 'staff': staff})
+# @login_required
+# def supplier_list_view(request, supermarket_id):
+#     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+#     if request.method == 'POST':
+#         Supplier.objects.create(name=request.POST.get('name'), contact_person=request.POST.get('contact_person'),
+#                                 email=request.POST.get('email'), phone=request.POST.get('phone'),
+#                                 address=request.POST.get('address'))
+#         return redirect('inventory:supplier_list', supermarket_id=supermarket.id)
+#     suppliers = Supplier.objects.all()
+#     return render(request, 'inventory/management/supplier_list.html',
+#                   {'supermarket': supermarket, 'suppliers': suppliers})
+
+from django.contrib.auth.decorators import login_required
+
+from Inventory.models import Supplier
+
+
 @login_required
 def supplier_list_view(request, supermarket_id):
-    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
-    if request.method == 'POST':
-        Supplier.objects.create(name=request.POST.get('name'), contact_person=request.POST.get('contact_person'),
-                                email=request.POST.get('email'), phone=request.POST.get('phone'),
-                                address=request.POST.get('address'))
-        return redirect('inventory:supplier_list', supermarket_id=supermarket.id)
+    supermarket = get_object_or_404(
+        Supermarket,
+        pk=supermarket_id,
+        owner=request.user
+    )
+
+    # CREATE NEW
+    if request.POST.get("mode") == "create":
+        Supplier.objects.create(
+            name=request.POST.get("name"),
+            contact_person=request.POST.get("contact_person"),
+            email=request.POST.get("email"),
+            phone=request.POST.get("phone"),
+            address=request.POST.get("address"),
+        )
+        return redirect("inventory:supplier_list", supermarket_id=supermarket.id)
+
+    # UPDATE
+    if request.POST.get("mode") == "edit":
+        s = Supplier.objects.get(pk=request.POST.get("supplier_id"))
+        s.name = request.POST.get("name")
+        s.contact_person = request.POST.get("contact_person")
+        s.email = request.POST.get("email")
+        s.phone = request.POST.get("phone")
+        s.address = request.POST.get("address")
+        s.save()
+        return redirect("inventory:supplier_list", supermarket_id=supermarket.id)
+
+    # DELETE
+    if request.POST.get("mode") == "delete":
+        Supplier.objects.filter(pk=request.POST.get("supplier_id")).delete()
+        return redirect("inventory:supplier_list", supermarket_id=supermarket.id)
+
     suppliers = Supplier.objects.all()
-    return render(request, 'inventory/management/supplier_list.html',
-                  {'supermarket': supermarket, 'suppliers': suppliers})
+    return render(request, "inventory/management/supplier_list.html", {
+        "supermarket": supermarket,
+        "suppliers": suppliers,
+    })
+
 # --- API Endpoints ---
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])

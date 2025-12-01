@@ -1,0 +1,80 @@
+{% extends "inventory/base.html" %}
+{% block title %}Edit Label Sheet{% endblock %}
+{% block header %}Edit Label Sheet{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-white rounded-2xl shadow p-4 space-y-3">
+    <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <div>
+            <label class="text-xs font-semibold text-gray-600">Name</label>
+            <input type="text" name="name"
+                   value="{{ sheet.name }}"
+                   class="w-full mt-1 border rounded-xl px-3 py-2 text-sm">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Columns</label>
+                <input type="number" name="cols" value="{{ sheet.cols }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Rows</label>
+                <input type="number" name="rows" value="{{ sheet.rows }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Label width (mm)</label>
+                <input type="number" name="label_width_mm" value="{{ sheet.label_width_mm }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Label height (mm)</label>
+                <input type="number" name="label_height_mm" value="{{ sheet.label_height_mm }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Top margin (mm)</label>
+                <input type="number" name="margin_top_mm" value="{{ sheet.margin_top_mm }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Left margin (mm)</label>
+                <input type="number" name="margin_left_mm" value="{{ sheet.margin_left_mm }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Horizontal gap (mm)</label>
+                <input type="number" name="gap_horizontal_mm" value="{{ sheet.gap_horizontal_mm }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="text-[11px] font-semibold text-gray-600">Vertical gap (mm)</label>
+                <input type="number" name="gap_vertical_mm" value="{{ sheet.gap_vertical_mm }}"
+                       class="w-full mt-1 border rounded-xl px-3 py-1.5 text-sm">
+            </div>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+            <button type="submit"
+                    class="flex-1 bg-blue-600 text-white text-sm font-semibold rounded-xl py-2">
+                Update Layout
+            </button>
+            <a href="{% url 'ticket:label_sheet_list' sheet.supermarket.id %}"
+               class="px-3 py-2 rounded-xl border text-xs text-gray-600 flex items-center justify-center">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

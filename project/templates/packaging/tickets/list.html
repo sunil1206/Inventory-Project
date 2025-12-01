@@ -1,0 +1,36 @@
+{% extends "inventory/base.html" %}
+{% block title %}Ticket Labels{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+
+    <h2 class="text-xl font-semibold mb-4">Ticket Print Queue</h2>
+
+    <a href="{% url 'packaging:ticket_pdf_export' supermarket.id %}" 
+       class="px-4 py-2 bg-green-600 text-white rounded-lg mb-4 inline-block">
+        Download PDF for Printer
+    </a>
+
+    <table class="min-w-full bg-white shadow rounded mt-4">
+        <thead>
+            <tr class="bg-gray-100 text-left text-sm">
+                <th class="p-2">Product</th>
+                <th class="p-2">Price</th>
+                <th class="p-2">PPL</th>
+                <th class="p-2">Theme</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in tickets %}
+            <tr class="border-t text-sm">
+                <td class="p-2">{{ t.product.name }}</td>
+                <td class="p-2">{{ t.unit_price }} €</td>
+                <td class="p-2">{{ t.price_per_liter }}</td>
+                <td class="p-2">{{ t.theme.name if t.theme else "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</div>
+{% endblock %}

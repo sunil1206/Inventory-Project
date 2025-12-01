@@ -47,7 +47,10 @@ INSTALLED_APPS = [
 'Inventory',
     'users',
 'sslserver',
+    'Tickettheme',
     'order',
+    'competitor',
+    'analytics',
 
 'rest_framework',
     # 'account',
@@ -90,9 +93,27 @@ SOCIALACCOUNT_PROVIDERS = {
 SCRAPER_API_KEY = '76677a2a98ccc4cb1aad90d6c3c9a28e'
 #
 
-# Celery Configuration
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# Celery / Redis configuration
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_RESULT_BACKEND = "redis://localhost:6379/1"
+
+# Optional: serialization, timezone, etc.
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "Europe/Paris"
+
+# Optional: Celery Beat schedule for periodic tasks (see below)
+from celery.schedules import crontab
+
+CELERY_BEAT_SCHEDULE = {
+    "scrape-competitor-prices-every-3-hours": {
+        "task": "competitor.tasks.run_competitor_price_scraping",
+        "schedule": crontab(minute=0, hour="*/3"),  # every 3 hours
+        "args": [200],  # limit_per_run
+    },
+}
+
 
 
 MIDDLEWARE = [

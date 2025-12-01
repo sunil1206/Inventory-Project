@@ -1,117 +1,102 @@
 {% extends "inventory/base.html" %}
-{% block title %}Scan Carton Barcode{% endblock %}
-{% block header %}Packaging: Map Carton (DU){% endblock %}
+{% block title %}Map Carton Packaging{% endblock %}
+{% block header %}Packaging · Map Carton{% endblock %}
 
 {% block content %}
-<div class="max-w-xl mx-auto bg-white rounded-lg shadow p-6">
-    <h2 class="text-lg font-semibold mb-4">Step 2 · Scan Carton for {{ product.name }}</h2>
-
-    <p class="text-sm text-gray-600 mb-3">
-        Unit barcode (CU): <span class="font-mono">{{ unit_barcode }}</span>
-    </p>
-
-    <div id="statusBox" class="mb-4 text-sm text-gray-600"></div>
-
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-            Carton Barcode (DU)
-        </label>
-        <input id="cartonBarcodeInput"
-               type="text"
-               class="w-full border rounded px-3 py-2"
-               placeholder="Scan or type carton barcode">
+<div class="max-w-xl mx-auto space-y-6">
+    <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-xl font-bold text-gray-800 mb-1">
+            Map Carton for: {{ product.name }}
+        </h2>
+        <p class="text-sm text-gray-600 mb-2">
+            Unit barcode (CU): <span class="font-mono">{{ unit_barcode }}</span>
+        </p>
+        <p class="text-xs text-gray-500">
+            Only superadmins can modify packaging here.
+        </p>
     </div>
 
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-            Units per carton
-        </label>
-        <input id="unitsInput"
-               type="number"
-               min="1"
-               value="6"
-               class="w-32 border rounded px-3 py-2">
+    <div class="bg-white rounded-xl shadow p-6 space-y-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">Existing carton configurations</h3>
+        {% if existing_packs %}
+            <ul class="text-sm text-gray-700 list-disc pl-5 space-y-1 mb-4">
+            {% for p in existing_packs %}
+                <li>
+                    {{ p.units_per_carton }} units · Carton: <span class="font-mono">{{ p.carton_barcode }}</span>
+                    {% if p.supplier %} · Supplier: {{ p.supplier.name }}{% endif %}
+                </li>
+            {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-xs text-gray-500 mb-4">No carton configs yet for this CU.</p>
+        {% endif %}
+
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">Add / Update carton config</h3>
+        <form id="cartonForm" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="unit_barcode" value="{{ unit_barcode }}">
+
+            <div>
+                <label class="text-xs font-medium text-gray-600">Carton barcode (DU)</label>
+                <input type="text" name="carton_barcode" class="w-full border rounded px-3 py-2 text-sm"
+                       placeholder="Scan or type carton code">
+            </div>
+
+            <div>
+                <label class="text-xs font-medium text-gray-600">Units per carton</label>
+                <input type="number" name="units_per_carton" min="1"
+                       class="w-full border rounded px-3 py-2 text-sm" placeholder="e.g. 12 or 24">
+            </div>
+
+            <div>
+                <label class="text-xs font-medium text-gray-600">Supplier (optional)</label>
+                <select name="supplier_id" class="w-full border rounded px-3 py-2 text-sm">
+                    <option value="">-- None --</option>
+                    {% for s in product.suppliers.all %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg text-sm font-semibold">
+                Save carton mapping
+            </button>
+
+            <p id="saveStatus" class="text-xs text-gray-500 mt-2"></p>
+        </form>
     </div>
-
-    <button id="saveBtn"
-            class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mb-3">
-        Save Mapping
-    </button>
-
-    <div class="mb-4">
-        <p class="text-sm text-gray-500 mb-2">Or scan carton with camera:</p>
-        <div id="reader" class="w-full h-64 bg-gray-100 rounded flex items-center justify-center text-gray-400">
-            Camera will appear here…
-        </div>
-        <button id="startCameraBtn"
-                class="mt-3 w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
-            Start Camera Scanner
-        </button>
-    </div>
-
-    <a href="{% url 'packaging:scan_unit' %}"
-       class="text-sm text-gray-500 hover:text-gray-700 underline">
-        ← Back to Unit Scanner
-    </a>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://unpkg.com/html5-qrcode"></script>
 <script>
-(function() {
-    const unitBarcode = "{{ unit_barcode }}";
-    const cartonInput = document.getElementById("cartonBarcodeInput");
-    const unitsInput = document.getElementById("unitsInput");
-    const saveBtn = document.getElementById("saveBtn");
-    const statusBox = document.getElementById("statusBox");
-    let qrScanner = null;
+(function(){
+    const form = document.getElementById("cartonForm");
+    const status = document.getElementById("saveStatus");
 
-    saveBtn.addEventListener("click", function() {
-        const carton = cartonInput.value.trim();
-        const units = unitsInput.value.trim();
+    form.addEventListener("submit", function(e){
+        e.preventDefault();
+        status.textContent = "Saving…";
 
-        if (!carton) {
-            statusBox.innerHTML = '<span class="text-red-600">Carton barcode is required.</span>';
-            return;
-        }
-
-        const formData = new FormData();
-        formData.append("csrfmiddlewaretoken", "{{ csrf_token }}");
-        formData.append("unit_barcode", unitBarcode);
-        formData.append("carton_barcode", carton);
-        formData.append("units_per_carton", units);
+        const formData = new FormData(form);
 
         fetch("{% url 'packaging:save_carton_api' %}", {
             method: "POST",
             body: formData
         })
-        .then(res => res.json())
+        .then(r => r.json())
         .then(data => {
             if (data.success) {
-                statusBox.innerHTML =
-                    '<span class="text-green-600 font-semibold">Mapping saved!</span>';
+                status.textContent = data.message;
+                setTimeout(() => window.location.reload(), 600);
             } else {
-                statusBox.innerHTML =
-                    '<span class="text-red-600">Error: ' + (data.message || 'Unknown') + '</span>';
+                status.textContent = data.message || "Error saving.";
             }
         })
         .catch(err => {
-            statusBox.innerHTML = '<span class="text-red-600">Error: ' + err + '</span>';
+            status.textContent = "Error: " + err;
         });
-    });
-
-    const startBtn = document.getElementById("startCameraBtn");
-    startBtn.addEventListener("click", function() {
-        if (qrScanner) return;
-        qrScanner = new Html5Qrcode("reader");
-        qrScanner.start(
-            { facingMode: "environment" },
-            { fps: 10, qrbox: 250 },
-            decodedText => {
-                cartonInput.value = decodedText;
-            }
-        );
     });
 })();
 </script>

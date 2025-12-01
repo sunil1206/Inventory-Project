@@ -1,0 +1,52 @@
+{% extends "inventory/base.html" %}
+{% block title %}Supplier Performance{% endblock %}
+{% block header %}Supplier Performance{% endblock %}
+
+{% block content %}
+<div class="bg-white p-4 rounded-xl shadow mb-6">
+    <h3 class="font-semibold mb-3 text-gray-800">Suppliers by Cartons Ordered</h3>
+    <canvas id="supplierChart" class="w-full h-64 mb-4"></canvas>
+
+    <ul class="divide-y text-sm">
+        {% for s in suppliers %}
+            <li class="py-2 flex justify-between">
+                <span class="truncate">{{ s.supplier__name }}</span>
+                <span>{{ s.orders }} orders · {{ s.cartons|default:"0" }} cartons</span>
+            </li>
+        {% empty %}
+            <li class="py-4 text-center text-gray-500">No supplier data.</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<script>
+    const supplierLabels = [
+        {% for s in suppliers %}
+            "{{ s.supplier__name }}",
+        {% endfor %}
+    ];
+    const supplierData = [
+        {% for s in suppliers %}
+            {{ s.cartons|default:"0" }},
+        {% endfor %}
+    ];
+
+    new Chart(document.getElementById("supplierChart"), {
+        type: "bar",
+        data: {
+            labels: supplierLabels,
+            datasets: [{
+                label: "Cartons Ordered",
+                data: supplierData,
+                backgroundColor: "#3b82f6"
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

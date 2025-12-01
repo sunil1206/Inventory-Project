@@ -1,0 +1,40 @@
+{% extends "inventory/base.html" %}
+{% block title %}Ticket Themes{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto space-y-5">
+
+    <div class="flex justify-between">
+        <h2 class="text-xl font-semibold">Ticket Themes</h2>
+        <a href="{% url 'ticket:ticket_theme_create' supermarket.id %}"
+           class="px-3 py-2 bg-blue-600 text-white rounded">
+            ➕ New Theme
+        </a>
+    </div>
+
+    <div class="space-y-3">
+    {% for t in themes %}
+        <div class="p-4 bg-white rounded shadow flex justify-between items-center">
+            <div>
+                <div class="font-semibold">{{ t.name }}</div>
+                <div class="text-xs text-gray-500">
+                    {{ t.width_mm }}mm × {{ t.height_mm }}mm
+                </div>
+                {% if t.is_default %}
+                    <span class="text-green-600 text-xs font-bold">DEFAULT</span>
+                {% endif %}
+            </div>
+            <div class="space-x-2">
+                <a href="{% url 'ticket:ticket_theme_edit' supermarket.id t.id %}"
+                   class="text-blue-600 text-xs">Edit</a>
+                <a href="{% url 'ticket:ticket_theme_delete' supermarket.id t.id %}"
+                   class="text-red-600 text-xs">Delete</a>
+            </div>
+        </div>
+    {% empty %}
+        <p class="text-sm text-gray-500">No themes yet.</p>
+    {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

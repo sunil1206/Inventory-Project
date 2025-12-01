@@ -1,10 +1,9 @@
 # packaging/views.py
 import json
-
 from collections import defaultdict
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import transaction
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
@@ -19,18 +18,29 @@ from .models import ProductPackaging, OrderBatch, OrderLine
 
 
 # -----------------------------
+# Helper: only superadmin can edit packaging
+# -----------------------------
+def is_superadmin(user):
+    # Adapt this to your own custom flag/role
+    return user.is_superuser or getattr(user, "is_superadmin", False)
+
+
+# -----------------------------
 # 1. PACKAGING MAPPING (CU → DU)
 # -----------------------------
 
 @login_required(login_url='account_login')
-def scan_unit_view(request):
+def scan_unit_view(request, supermarket_id):
     """
-    Page to scan a UNIT barcode (consumer unit).
-    - If product not found: show message.
-    - If mapping exists: show info.
-    - If mapping missing: ask to go to carton scan.
+    Step 1: Scan CU barcode.
+    If packaging exists => show info.
+    If not => redirect to carton scan (superadmin only).
     """
-    return render(request, "packaging/scan_unit.html")
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+
+    return render(request, "packaging/scan_unit.html", {
+        "supermarket": supermarket
+    })
 
 
 @login_required(login_url='account_login')
@@ -51,57 +61,75 @@ def check_unit_api(request):
     if not product:
         return JsonResponse({"status": "not_found"}, status=200)
 
-    mapping = ProductPackaging.objects.filter(unit_barcode=barcode, product=product).first()
+    # multiple packaging options allowed for same CU
+    pack_options = ProductPackaging.objects.filter(
+        product=product,
+        unit_barcode=barcode,
+        is_active=True,
+    )
 
-    if mapping and mapping.carton_barcode:
-        return JsonResponse({
+    if pack_options.exists():
+        data = {
             "status": "carton_exists",
             "product_name": product.name,
-            "unit_barcode": mapping.unit_barcode,
-            "carton_barcode": mapping.carton_barcode,
-            "units_per_carton": mapping.units_per_carton or 1
-        })
+            "unit_barcode": barcode,
+            "options": [
+                {
+                    "id": p.id,
+                    "carton_barcode": p.carton_barcode,
+                    "units_per_carton": p.units_per_carton,
+                    "supplier": p.supplier.name if p.supplier else None,
+                }
+                for p in pack_options
+            ]
+        }
+        return JsonResponse(data)
 
-    # Ensure a stub mapping exists (unit barcode only)
-    if not mapping:
-        mapping = ProductPackaging.objects.create(
-            product=product,
-            unit_barcode=barcode,
-            carton_barcode=None,
-            units_per_carton=None
-        )
-
+    # No packaging yet => only superadmin may create
     return JsonResponse({
         "status": "need_carton",
         "product_name": product.name,
-        "unit_barcode": mapping.unit_barcode
+        "unit_barcode": barcode,
     })
 
 
 @login_required(login_url='account_login')
-def scan_carton_view(request, unit_barcode):
+@user_passes_test(is_superadmin)
+def scan_carton_view(request, supermarket_id, unit_barcode):
     """
-    Page to scan CARTON barcode for a given UNIT barcode.
+    Page to scan / enter CARTON config for given CU.
+    Only superadmin can access.
     """
+    supermarket = get_object_or_404(Supermarket, pk=supermarket_id)
     product = get_object_or_404(Product, barcode=unit_barcode)
+
+    existing_packs = ProductPackaging.objects.filter(
+        product=product, unit_barcode=unit_barcode
+    )
+
     return render(request, "packaging/scan_carton.html", {
+        "supermarket": supermarket,
         "product": product,
-        "unit_barcode": unit_barcode
+        "unit_barcode": unit_barcode,
+        "existing_packs": existing_packs,
     })
 
 
 @login_required(login_url='account_login')
+@user_passes_test(is_superadmin)
 @require_POST
 def save_carton_api(request):
     """
     AJAX API to save carton barcode & units_per_carton.
+    Only superadmin can save.
     """
     unit_barcode = (request.POST.get("unit_barcode") or "").strip()
     carton_barcode = (request.POST.get("carton_barcode") or "").strip()
-    units_str = (request.POST.get("units_per_carton") or "").strip() or "1"
+    units_str = (request.POST.get("units_per_carton") or "").strip()
+    supplier_id = request.POST.get("supplier_id") or None
 
-    if not unit_barcode or not carton_barcode:
-        return JsonResponse({"success": False, "message": "Missing barcodes."}, status=400)
+    if not unit_barcode or not carton_barcode or not units_str:
+        return JsonResponse({"success": False, "message": "Missing required fields."}, status=400)
 
     product = Product.objects.filter(barcode=unit_barcode).first()
     if not product:
@@ -110,25 +138,33 @@ def save_carton_api(request):
     try:
         units = int(units_str)
         if units <= 0:
-            units = 1
+            raise ValueError
     except ValueError:
-        units = 1
+        return JsonResponse({"success": False, "message": "Invalid units_per_carton."}, status=400)
 
-    mapping, created = ProductPackaging.objects.update_or_create(
+    supplier = None
+    if supplier_id:
+        supplier = Supplier.objects.filter(pk=supplier_id).first()
+
+    packaging, created = ProductPackaging.objects.update_or_create(
         product=product,
         unit_barcode=unit_barcode,
+        carton_barcode=carton_barcode,
         defaults={
-            "carton_barcode": carton_barcode,
-            "units_per_carton": units
+            "units_per_carton": units,
+            "supplier": supplier,
+            "is_active": True,
         }
     )
 
     return JsonResponse({
         "success": True,
         "message": "Carton mapping saved.",
-        "unit_barcode": mapping.unit_barcode,
-        "carton_barcode": mapping.carton_barcode,
-        "units_per_carton": mapping.units_per_carton
+        "id": packaging.id,
+        "unit_barcode": packaging.unit_barcode,
+        "carton_barcode": packaging.carton_barcode,
+        "units_per_carton": packaging.units_per_carton,
+        "supplier": packaging.supplier.name if packaging.supplier else None,
     })
 
 
@@ -149,26 +185,26 @@ def _get_or_create_draft_batch(supermarket, user):
     if not batch:
         batch = OrderBatch.objects.create(
             supermarket=supermarket,
-            created_by=user
+            created_by=user,
         )
     return batch
 
 
 @login_required(login_url="account_login")
 def order_builder_view(request, supermarket_id):
-    """
-    Single page:
-    - shows current draft order
-    - has scan input + camera button
-    - final 'Save & Download PDF' button
-    """
-    supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
+    supermarket = get_object_or_404(
+        Supermarket, pk=supermarket_id, owner=request.user
+    )
 
     batch = _get_or_create_draft_batch(supermarket, request.user)
     suppliers = Supplier.objects.all().order_by("name")
 
+    # ----------------------------
+    # POST: Finalize or add item
+    # ----------------------------
     if request.method == "POST":
-        # 1) Finalize & PDF
+
+        # FINALIZE
         if "finalize" in request.POST:
             supplier_id = request.POST.get("supplier_id") or None
             reference = (request.POST.get("reference") or "").strip()
@@ -180,84 +216,74 @@ def order_builder_view(request, supermarket_id):
             batch.save()
 
             if not batch.lines.exists():
-                messages.error(request, "Order is empty. Scan at least one product before finalizing.")
+                messages.error(
+                    request,
+                    "Order is empty. Scan at least 1 product before finalizing."
+                )
                 batch.status = "draft"
                 batch.save()
-                return redirect("packaging:order_builder", supermarket_id=supermarket.id)
+                return redirect("packaging:order_builder", supermarket_id)
 
             return _generate_order_pdf(batch)
 
-        # 2) Add product by barcode (from manual form submit)
+        # ADD SINGLE PRODUCT (Manual)
         barcode = (request.POST.get("barcode") or "").strip()
-        supplier_id = request.POST.get("supplier_id") or None
-        reference = (request.POST.get("reference") or "").strip()
-
-        # Keep supplier/reference on each post
-        if supplier_id:
-            batch.supplier_id = supplier_id
-        batch.reference = reference
-        batch.save()
 
         if not barcode:
-            messages.error(request, "No barcode received.")
-            return redirect("packaging:order_builder", supermarket_id=supermarket.id)
+            messages.error(request, "Barcode is empty.")
+            return redirect("packaging:order_builder", supermarket_id)
 
         _add_barcode_to_batch(batch, barcode)
-        messages.success(request, f"Added product {barcode} to order.")
-        return redirect("packaging:order_builder", supermarket_id=supermarket.id)
+        messages.success(request, f"Added product {barcode}.")
+        return redirect("packaging:order_builder", supermarket_id)
 
-    # GET: just display the current order
+    # ----------------------------
+    # GET page
+    # ----------------------------
     context = {
         "supermarket": supermarket,
         "batch": batch,
         "suppliers": suppliers,
+        "lines": batch.lines.select_related("product").all()
     }
     return render(request, "packaging/order_builder.html", context)
 
 
+
 def _add_barcode_to_batch(batch: OrderBatch, barcode: str):
     """
-    Core logic: add scanned barcode to batch.
+    Core logic: add scanned CU barcode to batch.
+    If multiple carton configs exist, we pick the first one for now.
+    (Later you can add a UI to choose between 12/24 etc.)
     """
     with transaction.atomic():
-        # Try to find the product in your master catalog
         product, _created = Product.objects.get_or_create(
             barcode=barcode,
             defaults={"name": f"Product {barcode}"}
         )
 
-        # Try to find packaging mapping (unit → carton)
-        pkg = ProductPackaging.objects.filter(unit_barcode=barcode, product=product).first()
+        # Get the first active packaging config (if any)
+        packaging = ProductPackaging.objects.filter(
+            product=product,
+            unit_barcode=barcode,
+            is_active=True,
+        ).order_by("units_per_carton").first()
 
-        units_per_carton = pkg.units_per_carton if pkg and pkg.units_per_carton else None
-        carton_barcode = pkg.carton_barcode if pkg and pkg.carton_barcode else None
-
-        # If batch already has this product, just +1 carton
         line, created_line = OrderLine.objects.get_or_create(
             batch=batch,
             product=product,
             unit_barcode=barcode,
-            defaults={
-                "cartons": 1,
-                "units_per_carton": units_per_carton,
-                "carton_barcode": carton_barcode,
-            },
+            packaging=packaging,
+            defaults={"cartons": 1},
         )
+
         if not created_line:
             line.cartons += 1
-            # If we just learned carton info, update line
-            if units_per_carton and not line.units_per_carton:
-                line.units_per_carton = units_per_carton
-            if carton_barcode and not line.carton_barcode:
-                line.carton_barcode = carton_barcode
             line.save()
 
 
 @login_required(login_url="account_login")
 def reset_order_batch_view(request, supermarket_id):
-    """
-    Clear current draft order for this user+supermarket and start fresh.
-    """
     supermarket = get_object_or_404(Supermarket, pk=supermarket_id, owner=request.user)
 
     OrderBatch.objects.filter(
@@ -309,7 +335,7 @@ def _generate_order_pdf(batch: OrderBatch) -> HttpResponse:
     y -= 15
 
     p.setFont("Helvetica", 9)
-    for line in batch.lines.select_related("product").all():
+    for line in batch.lines.select_related("product", "packaging").all():
         if y < 60:  # new page
             p.showPage()
             y = height - 50
@@ -360,22 +386,43 @@ def add_scanned_item(request, supermarket_id):
     return JsonResponse({"status": "ok"})
 
 
+# -----------------------------
+# 4. Edit / Delete order lines
+# -----------------------------
+
 @login_required(login_url='account_login')
 def update_order_line(request, supermarket_id, line_id):
-    line = get_object_or_404(OrderLine, id=line_id, batch__supermarket_id=supermarket_id)
+    line = get_object_or_404(
+        OrderLine,
+        id=line_id,
+        batch__supermarket_id=supermarket_id,
+        batch__created_by=request.user,
+        batch__status="draft",
+    )
+
     if request.method == "POST":
-        cartons = int(request.POST.get("cartons") or line.cartons)
-        if cartons <= 0:
-            cartons = 1
-        line.cartons = cartons
-        line.save()
-        messages.success(request, "Quantity updated.")
+        try:
+            cartons = int(request.POST.get("cartons") or line.cartons)
+            if cartons <= 0:
+                cartons = 1
+            line.cartons = cartons
+            line.save()
+            messages.success(request, "Quantity updated.")
+        except (TypeError, ValueError):
+            messages.error(request, "Invalid quantity.")
+
     return redirect("packaging:order_builder", supermarket_id=supermarket_id)
 
 
 @login_required(login_url='account_login')
 def delete_order_line(request, supermarket_id, line_id):
-    line = get_object_or_404(OrderLine, id=line_id, batch__supermarket_id=supermarket_id)
+    line = get_object_or_404(
+        OrderLine,
+        id=line_id,
+        batch__supermarket_id=supermarket_id,
+        batch__created_by=request.user,
+        batch__status="draft",
+    )
     line.delete()
     messages.success(request, "Product removed from order.")
     return redirect("packaging:order_builder", supermarket_id=supermarket_id)

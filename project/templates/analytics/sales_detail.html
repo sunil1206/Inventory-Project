@@ -1,0 +1,64 @@
+{% extends "inventory/base.html" %}
+{% block title %}Sales Analytics{% endblock %}
+{% block header %}Sales Analytics{% endblock %}
+
+{% block content %}
+<div class="bg-white p-4 rounded-xl shadow mb-6">
+    <canvas id="salesChart" class="w-full h-64"></canvas>
+</div>
+
+<div class="bg-white p-4 rounded-xl shadow">
+    <h3 class="font-semibold mb-3 text-gray-800">Sales by Category</h3>
+    <table class="w-full text-sm">
+        <thead class="text-left text-gray-500 border-b">
+            <tr>
+                <th class="py-2">Category</th>
+                <th class="py-2">Quantity</th>
+                <th class="py-2">Revenue (€)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in by_cat %}
+                <tr class="border-b">
+                    <td class="py-2">{{ row.category__name|default:"Uncategorized" }}</td>
+                    <td class="py-2">{{ row.qty }}</td>
+                    <td class="py-2">€{{ row.revenue }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="3" class="py-4 text-center text-gray-500">No sales data.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    const labels = [
+        {% for row in by_cat %}
+            "{{ row.category__name|default:'Uncategorized' }}",
+        {% endfor %}
+    ];
+    const data = [
+        {% for row in by_cat %}
+            {{ row.revenue|default:"0" }},
+        {% endfor %}
+    ];
+
+    new Chart(document.getElementById("salesChart"), {
+        type: "bar",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Revenue (€)",
+                data: data,
+                backgroundColor: "#22c55e"
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+</script>
+{% endblock %}

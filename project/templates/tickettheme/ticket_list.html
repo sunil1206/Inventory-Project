@@ -1,0 +1,162 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Ticket Labels{% endblock %}
+{% block header %}Ticket Label Queue{% endblock %}
+
+{% block content %}
+
+<div class="max-w-4xl mx-auto space-y-8">
+
+    <!-- =========================
+         SCAN AREA
+    ========================== -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-700 flex gap-2 items-center">
+            <span class="bg-green-100 text-green-700 w-8 h-8 rounded-full flex items-center justify-center">📷</span>
+            Scan product barcode
+        </h2>
+
+        <div id="scanArea" class="relative w-full h-64 bg-black rounded-lg flex items-center justify-center mt-4">
+            <div id="barcodeScanner"></div>
+
+            <button id="startScan"
+                class="absolute inset-0 bg-black bg-opacity-60 text-white flex flex-col items-center justify-center text-xl font-semibold cursor-pointer">
+                Tap to Start Scanner
+                <span class="text-sm opacity-80 mt-2">Use rear camera</span>
+            </button>
+        </div>
+
+        <p id="scanStatus" class="text-center text-sm text-gray-500 mt-2"></p>
+
+        <!-- Manual barcode -->
+        <form method="POST" class="flex gap-2 mt-4">
+            {% csrf_token %}
+            <input name="barcode" type="text" placeholder="Enter barcode manually"
+                class="flex-1 border px-3 py-2 rounded-lg text-sm"/>
+            <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm">
+                Add
+            </button>
+        </form>
+    </div>
+
+    <!-- =========================
+         TICKET QUEUE
+    ========================== -->
+    <div class="bg-white rounded-xl shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4 flex gap-2 items-center">
+            <span class="bg-blue-100 text-blue-700 w-8 h-8 flex items-center justify-center rounded-full">
+                🎟
+            </span>
+            Ticket Queue
+        </h2>
+
+        {% if tickets %}
+        <div class="space-y-3">
+
+            {% for t in tickets %}
+            <div class="border rounded-lg p-4 flex justify-between items-center bg-gray-50">
+
+                <!-- PRODUCT DETAILS -->
+                <div class="text-sm space-y-1">
+                    <div class="font-semibold text-gray-900 text-base">
+                        {{ t.product_name }}
+                    </div>
+
+                    <div class="font-mono text-xs text-gray-600">
+                        CU: {{ t.unit_barcode }}
+                    </div>
+
+                    {% if t.include_carton_barcode and t.carton_barcode %}
+                    <div class="font-mono text-xs text-gray-600">
+                        Carton: {{ t.carton_barcode }}
+                    </div>
+                    {% endif %}
+
+                    <div class="text-xs text-gray-600">
+                        Price: <b>{{ t.unit_price }} €</b>
+                    </div>
+
+                    {% if t.price_per_liter %}
+                    <div class="text-xs text-gray-600">
+                        {{ t.price_per_liter }}
+                    </div>
+                    {% endif %}
+
+                    {% if t.promo_display %}
+                    <div class="inline-block mt-2 bg-amber-100 text-amber-800 px-2 py-1 text-xs rounded">
+                        {{ t.promo_display }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- ACTION -->
+                <form method="POST" action="{% url 'ticket:ticket_delete' supermarket.id t.id %}">
+                    {% csrf_token %}
+                    <button onclick="return confirm('Remove ticket?')"
+                        class="bg-red-500 text-white px-3 py-1.5 rounded text-xs">
+                        ❌ Remove
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+
+        </div>
+
+        {% else %}
+        <p class="text-center text-gray-500 text-sm mt-3">📭 Queue empty. Scan a product.</p>
+        {% endif %}
+    </div>
+
+
+    <!-- =========================
+         ACTION BUTTONS
+    ========================== -->
+    <div class="grid grid-cols-2 gap-3">
+        <a href="{% url 'ticket:ticket_pdf_export' supermarket.id %}"
+           class="bg-green-600 text-white text-center py-3 rounded-lg font-semibold text-sm">
+            🖨 Print Tickets
+        </a>
+
+        <a href="{% url 'ticket:ticket_theme_list' supermarket.id %}"
+           class="bg-gray-700 text-white text-center py-3 rounded-lg font-semibold text-sm">
+            🎨 Themes
+        </a>
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+let scannerInstance = null;
+const scanBtn = document.getElementById("startScan");
+const scanStatus = document.getElementById("scanStatus");
+
+// Start camera
+scanBtn.addEventListener("click", () => {
+    scanBtn.classList.add("hidden");
+    scannerInstance = new Html5Qrcode("barcodeScanner");
+    scannerInstance.start(
+        { facingMode: "environment" },
+        { fps: 12, qrbox: 220 },
+        (barcode) => {
+            if (navigator.vibrate) navigator.vibrate(80);
+            scanStatus.textContent = "Detected: " + barcode;
+
+            fetch("{% url 'ticket:scan_ticket_api' supermarket.id %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({ barcode })
+            })
+            .then(res => res.json())
+            .then(() => window.location.reload());
+        }
+    ).catch(err => scanStatus.textContent = "Camera error: " + err);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Competitor Price Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+    <h1 class="text-lg font-semibold text-slate-900">
+      Competitor price snapshots
+    </h1>
+    <p class="text-sm text-slate-600">
+      Latest scraped prices across products and retailers.
+    </p>
+  </section>
+
+  <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3">
+    <div class="overflow-x-auto -mx-1">
+      <table class="min-w-full text-xs md:text-sm">
+        <thead class="bg-slate-50 text-slate-600">
+          <tr>
+            <th class="px-3 py-2 text-left font-medium border-b border-slate-200">When</th>
+            <th class="px-3 py-2 text-left font-medium border-b border-slate-200">Product</th>
+            <th class="px-3 py-2 text-left font-medium border-b border-slate-200">Competitor</th>
+            <th class="px-3 py-2 text-right font-medium border-b border-slate-200">Price</th>
+            <th class="px-3 py-2 text-left font-medium border-b border-slate-200">Promo</th>
+            <th class="px-3 py-2 text-right font-medium border-b border-slate-200">Compare</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for snap in latest_snapshots %}
+          <tr class="border-b border-slate-100 hover:bg-slate-50">
+            <td class="px-3 py-2 align-top text-slate-500">
+              {{ snap.scraped_at|date:"Y-m-d" }}<br>
+              <span class="text-[11px]">{{ snap.scraped_at|time:"H:i" }}</span>
+            </td>
+
+            <!-- PRODUCT CELL clickable -->
+            <td class="px-3 py-2 align-top">
+              <a href="{% url 'competitor:compare' snap.competitor_product.product.id %}"
+                 class="block text-slate-900 hover:text-blue-600 font-medium">
+                 {{ snap.competitor_product.product.name }}
+              </a>
+
+              {% if snap.competitor_product.product.barcode %}
+              <div class="text-[11px] text-slate-500">
+                {{ snap.competitor_product.product.barcode }}
+              </div>
+              {% endif %}
+            </td>
+
+            <!-- COMPETITOR NAME -->
+            <td class="px-3 py-2 align-top text-slate-800">
+              {{ snap.competitor_product.competitor.name }}
+            </td>
+
+            <!-- PRICE -->
+            <td class="px-3 py-2 align-top text-right">
+              <span class="font-semibold text-slate-900">
+                {{ snap.price }} {{ snap.currency }}
+              </span>
+            </td>
+
+            <!-- PROMO -->
+            <td class="px-3 py-2 align-top">
+              {% if snap.is_promo %}
+                <span class="inline-flex px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[11px] font-medium">
+                  {{ snap.promo_text|default:"Promo" }}
+                </span>
+              {% else %}
+                <span class="text-slate-400">–</span>
+              {% endif %}
+            </td>
+
+            <!-- ACTION BUTTON REDIRECT -->
+            <td class="px-3 py-2 align-top text-right">
+                <a href="{% url 'competitor:compare' snap.competitor_product.product.id %}"
+                   class="px-2 py-1 text-xs rounded bg-black text-white hover:bg-gray-700">
+                    Compare
+                </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="px-3 py-4 text-center text-slate-500">
+              No competitor price data yet. Start by mapping some products.
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

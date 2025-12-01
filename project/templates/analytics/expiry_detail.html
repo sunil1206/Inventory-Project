@@ -1,0 +1,34 @@
+{% extends "inventory/base.html" %}
+{% block title %}Expiry Analytics{% endblock %}
+{% block header %}Expiry Analytics{% endblock %}
+
+{% block content %}
+<div class="bg-white p-4 rounded-xl shadow mb-6">
+    <canvas id="expiryDetailChart" class="w-full h-64"></canvas>
+</div>
+
+<ul class="bg-white p-4 rounded-xl shadow text-sm">
+    <li class="flex justify-between py-2 border-b">
+        <span>Expired</span><span>{{ stats.expired }}</span>
+    </li>
+    <li class="flex justify-between py-2 border-b">
+        <span>Expiring in 7 days</span><span>{{ stats.expiring }}</span>
+    </li>
+    <li class="flex justify-between py-2">
+        <span>Fresh</span><span>{{ stats.fresh }}</span>
+    </li>
+</ul>
+
+<script>
+    new Chart(document.getElementById("expiryDetailChart"), {
+        type: "pie",
+        data: {
+            labels: ["Expired", "Expiring Soon", "Fresh"],
+            datasets: [{
+                data: [{{ stats.expired }}, {{ stats.expiring }}, {{ stats.fresh }}],
+                backgroundColor: ["#ef4444", "#eab308", "#22c55e"]
+            }]
+        }
+    });
+</script>
+{% endblock %}

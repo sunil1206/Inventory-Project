@@ -1,0 +1,256 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+{% block header %}Analytics Overview{% endblock %}
+
+{% block content %}
+
+<!-- ===== KPI CARDS ===== -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+    <!-- Revenue -->
+    <div class="bg-white p-5 rounded-xl shadow hover:shadow-md transition">
+        <p class="text-gray-500 text-sm">Total Revenue</p>
+        <h2 class="text-3xl font-bold text-green-600 mt-1">€{{ total_revenue }}</h2>
+        <p class="text-xs text-gray-400 mt-1">last 30 days</p>
+    </div>
+
+    <!-- Active Pricing Rules -->
+    <div class="bg-white p-5 rounded-xl shadow hover:shadow-md transition">
+        <p class="text-gray-500 text-sm">Active Pricing Rules</p>
+        <h2 class="text-3xl font-bold text-blue-600 mt-1">{{ active_rules }}</h2>
+        <p class="text-xs text-gray-400 mt-1">automation engine</p>
+    </div>
+
+    <!-- Active Promotions -->
+    <div class="bg-white p-5 rounded-xl shadow hover:shadow-md transition">
+        <p class="text-gray-500 text-sm">Active Promotions</p>
+        <h2 class="text-3xl font-bold text-orange-600 mt-1">{{ active_promos }}</h2>
+        <p class="text-xs text-gray-400 mt-1">store-wide</p>
+    </div>
+
+    <!-- Avg Discount Strength -->
+    <div class="bg-white p-5 rounded-xl shadow hover:shadow-md transition">
+        <p class="text-gray-500 text-sm">Avg. Discount Strength</p>
+        <h2 class="text-3xl font-bold text-purple-600 mt-1">{{ avg_discount }}%</h2>
+        <p class="text-xs text-gray-400 mt-1">based on discounted sales</p>
+    </div>
+</div>
+
+
+<!-- ========== STOCK STATUS + SALES TREND ========== -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Stock Expiry -->
+    <div class="bg-white p-5 rounded-xl shadow">
+        <div class="flex justify-between items-center">
+            <h3 class="font-semibold text-gray-700">Stock Expiry Status</h3>
+            <a href="{% url 'analytics:expiry_detail' supermarket.id %}" class="text-xs text-green-600">Details ➜</a>
+        </div>
+        <canvas id="expiryChart" class="h-56 mt-3"></canvas>
+    </div>
+
+    <!-- Sales Last 30 Days -->
+    <div class="bg-white p-5 rounded-xl shadow">
+        <div class="flex justify-between items-center">
+            <h3 class="font-semibold text-gray-700">Sales Trend (30 days)</h3>
+            <a href="{% url 'analytics:sales_detail' supermarket.id %}" class="text-xs text-green-600">Details ➜</a>
+        </div>
+        <canvas id="salesTrendChart" class="h-56 mt-3"></canvas>
+    </div>
+</div>
+
+
+<!-- ========== CATEGORY + SUPPLIER PERFORMANCE ========== -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Revenue by Category -->
+    <div class="bg-white p-5 rounded-xl shadow">
+        <div class="flex justify-between items-center">
+            <h3 class="font-semibold text-gray-700">Revenue by Category</h3>
+        </div>
+        <canvas id="catChart" class="h-56 mt-3"></canvas>
+    </div>
+
+    <!-- Supplier KPI -->
+    <div class="bg-white p-5 rounded-xl shadow">
+        <div class="flex justify-between items-center">
+            <h3 class="font-semibold text-gray-700">Top Suppliers by Cartons</h3>
+            <a href="{% url 'analytics:supplier_performance' supermarket.id %}" class="text-xs text-green-600">Details ➜</a>
+        </div>
+        <canvas id="supplierChart" class="h-56 mt-3"></canvas>
+    </div>
+</div>
+
+
+<!-- ========== PRICING ENGINE + PROMO STRATEGY ========== -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Pricing Rule Types -->
+    <div class="bg-white p-5 rounded-xl shadow">
+        <h3 class="font-semibold text-gray-700">Pricing Rule Distribution</h3>
+        <canvas id="ruleChart" class="h-56 mt-3"></canvas>
+    </div>
+<!-- ========== DISCOUNT IMPACT ========== -->
+<div class="bg-white p-5 rounded-xl shadow">
+    <h3 class="font-semibold text-gray-700">Sale Impact by Discount Type</h3>
+    <p class="text-xs text-gray-400">How much your sales used pricing rules vs promotions</p>
+    <canvas id="impactChart" class="h-56 mt-3"></canvas>
+</div>
+    <!-- Promotions by Type -->
+    <div class="bg-white p-5 rounded-xl shadow">
+        <h3 class="font-semibold text-gray-700">Promotion Types</h3>
+        <canvas id="promoChart" class="h-56 mt-3"></canvas>
+    </div>
+</div>
+
+
+
+
+
+<!-- ========== RECENT COMPETITOR PRICES ========== -->
+<div class="bg-white p-5 rounded-xl shadow mb-8">
+    <div class="flex justify-between items-center mb-3">
+        <h3 class="font-semibold text-gray-700">Recent Competitor Prices</h3>
+        <a href="{% url 'analytics:competitor_detail' supermarket.id %}"
+           class="text-xs text-green-600 hover:underline">View all</a>
+    </div>
+    <div class="divide-y text-sm max-h-64 overflow-y-auto">
+        {% for row in competitor_records %}
+            <div class="py-2 flex justify-between items-center">
+                <div class="flex-1 pr-3 truncate">
+                    <p class="font-medium truncate">{{ row.product.name }}</p>
+                    <p class="text-xs text-gray-500 truncate">{{ row.competitor.name }}</p>
+                </div>
+                <span class="font-semibold text-green-600">€{{ row.price }}</span>
+            </div>
+        {% empty %}
+            <p class="py-4 text-center text-gray-500">No competitor data.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+/* =============================
+   DATA FROM DJANGO
+============================= */
+
+const expiryData = {{ expiry_data|safe }};
+const catLabels = {{ cat_labels|safe }};
+const catValues = {{ cat_values|safe }};
+
+const supplierLabels = {{ supplier_labels|safe }};
+const supplierValues = {{ supplier_values|safe }};
+
+const salesTrend = {{ sales_trend|safe }};
+const ruleLabels = {{ rule_labels|safe }};
+const ruleValues = {{ rule_values|safe }};
+
+const promoLabels = {{ promo_labels|safe }};
+const promoValues = {{ promo_values|safe }};
+
+const impactLabels = {{ impact_labels|safe }};
+const impactValues = {{ impact_values|safe }};
+</script>
+
+<script>
+/* =============================
+   CHARTS
+============================= */
+
+new Chart(document.getElementById('expiryChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ["Expired", "Expiring Soon", "Fresh"],
+        datasets: [{
+            data: expiryData,
+            backgroundColor: ["#ef4444", "#eab308", "#22c55e"]
+        }]
+    }
+});
+
+new Chart(document.getElementById('salesTrendChart'), {
+    type: 'line',
+    data: {
+        labels: salesTrend.labels,
+        datasets: [{
+            label: "Revenue (€)",
+            data: salesTrend.values,
+            borderColor: "#16a34a",
+            fill: true,
+            backgroundColor: "rgba(22, 163, 74, .1)",
+            tension: 0.35
+        }]
+    }
+});
+
+new Chart(document.getElementById('catChart'), {
+    type: 'bar',
+    data: {
+        labels: catLabels,
+        datasets: [{
+            label: "Revenue (€)",
+            data: catValues,
+            backgroundColor: "#22c55e"
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } }
+    }
+});
+
+new Chart(document.getElementById('supplierChart'), {
+    type: 'bar',
+    data: {
+        labels: supplierLabels,
+        datasets: [{
+            label: "Cartons Ordered",
+            data: supplierValues,
+            backgroundColor: "#3b82f6"
+        }]
+    },
+    options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true } }
+    }
+});
+
+new Chart(document.getElementById('ruleChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ruleLabels,
+        datasets: [{
+            data: ruleValues,
+            backgroundColor: ["#3b82f6", "#ec4899", "#f97316", "#22c55e"]
+        }]
+    }
+});
+
+new Chart(document.getElementById('promoChart'), {
+    type: 'polarArea',
+    data: {
+        labels: promoLabels,
+        datasets: [{
+            data: promoValues,
+            backgroundColor: ["#a855f7", "#ef4444", "#f59e0b", "#22c55e"]
+        }]
+    }
+});
+
+new Chart(document.getElementById('impactChart'), {
+    type: 'pie',
+    data: {
+        labels: impactLabels,
+        datasets: [{
+            data: impactValues,
+            backgroundColor: ["#6b7280", "#2563eb", "#f97316"]
+        }]
+    }
+});
+</script>
+
+{% endblock %}

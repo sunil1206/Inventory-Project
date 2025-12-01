@@ -1,0 +1,42 @@
+{% extends "inventory/base.html" %}
+{% block title %}Create Theme{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto space-y-5 bg-white rounded shadow p-5">
+
+<form method="POST">
+    {% csrf_token %}
+
+    <label>Name</label>
+    <input class="input" name="name" required>
+
+    <label>Background Color</label>
+    <input class="input" name="background_color" value="#FFFFFF">
+
+    <label>Text Color</label>
+    <input class="input" name="text_color" value="#000000">
+
+    <label>Accent Color</label>
+    <input class="input" name="accent_color" value="#FF0000">
+
+    <label>Width (mm)</label>
+    <input class="input" type="number" name="width_mm" value="80">
+
+    <label>Height (mm)</label>
+    <input class="input" type="number" name="height_mm" value="50">
+
+    <label>
+        <input type="checkbox" name="match_product_color">
+        Match product color
+    </label>
+
+    <label>
+        <input type="checkbox" name="is_default">
+        Set as default
+    </label>
+
+    <button class="mt-4 btn-primary w-full">Save</button>
+</form>
+
+</div>
+{% endblock %}

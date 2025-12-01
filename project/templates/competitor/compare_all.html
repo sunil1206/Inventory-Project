@@ -1,0 +1,270 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Competitor Prices{% endblock %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-lg shadow-lg space-y-4">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+            <h1 class="text-lg font-semibold text-gray-900">
+                Competitor Price Analysis – {{ supermarket.name }}
+            </h1>
+            <p class="text-xs text-gray-500">
+                Compare your shelf prices vs Franprix, Carrefour, Monoprix, etc.
+            </p>
+        </div>
+
+        <!-- Search box -->
+        <div class="flex items-center gap-2">
+            <input id="searchInput" type="text"
+                   placeholder="Search by name or barcode"
+                   class="border rounded-lg px-3 py-1.5 text-sm w-64">
+        </div>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-500" id="comparisonTable">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3">Product</th>
+                    <th class="px-6 py-3 text-center">Your Price</th>
+                    <th class="px-6 py-3 text-center">Lowest Market</th>
+                    <th class="px-6 py-3 text-center cursor-pointer" id="diffHeader">
+                        Difference
+                        <span class="text-[10px] text-gray-400">(click to sort)</span>
+                    </th>
+                    <th class="px-6 py-3">Competitor Breakdown</th>
+                    <th class="px-6 py-3 text-center">Status</th>
+                    <th class="px-6 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in analysis %}
+                <tr class="bg-white border-b hover:bg-gray-50 product-row"
+                    data-search="{{ item.product.name }} {{ item.product.brand }} {{ item.product.barcode }}"
+                    data-diff="{% if item.difference is not None %}{{ item.difference }}{% else %}0{% endif %}">
+                    <td class="px-6 py-4 font-medium text-gray-900">
+                        {{ item.product.name }}
+                        <div class="text-xs text-gray-500">
+                            {{ item.product.brand|default:"No brand" }} · {{ item.product.barcode }}
+                        </div>
+                    </td>
+
+                    <td class="px-6 py-4 text-center font-bold text-gray-800">
+                        {% if item.store_price %}
+                            €{{ item.store_price|floatformat:2 }}
+                        {% else %}
+                            <span class="text-gray-400">--</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="px-6 py-4 text-center">
+                        {% if item.stats.min_price %}
+                            <span class="text-green-600 font-bold">
+                                €{{ item.stats.min_price|floatformat:2 }}
+                            </span>
+                        {% else %}
+                            <span class="text-gray-400">--</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Difference with badge -->
+                    <td class="px-6 py-4 text-center">
+                        {% if item.difference is not None %}
+                            {% if item.difference > 0 %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+                                    +€{{ item.difference|floatformat:2 }}
+                                </span>
+                            {% elif item.difference < 0 %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                                    -€{{ item.difference|floatformat:2|slice:"1:" }}
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
+                                    Same
+                                </span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-400">--</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Competitor Breakdown -->
+                    <td class="px-6 py-4">
+                        <ul class="space-y-1 text-xs">
+                            {% for comp in item.competitors %}
+                                <li class="flex justify-between gap-2">
+                                    <a href="{{ comp.url }}" target="_blank"
+                                       class="text-blue-600 hover:underline">{{ comp.name }}</a>
+                                    <span>
+                                        {% if comp.price %}
+                                            €{{ comp.price|floatformat:2 }}
+                                        {% else %}
+                                            --
+                                        {% endif %}
+                                    </span>
+                                </li>
+                            {% empty %}
+                                <li class="text-xs text-gray-400">No competitor data yet.</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+
+                    <!-- Status badge -->
+                    <td class="px-6 py-4 text-center">
+                        {% if item.status == "Best Price" %}
+                            <span class="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                                🟢 Best Price
+                            </span>
+                        {% elif item.status == "Competitive" %}
+                            <span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold">
+                                🔵 Competitive
+                            </span>
+                        {% elif item.status == "Overpriced" %}
+                            <span class="px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+                                🔴 Overpriced
+                            </span>
+                        {% else %}
+                            <span class="px-2 py-1 rounded-full bg-gray-100 text-gray-500 text-xs">
+                                No data
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Actions: Refresh + Trend -->
+                    <td class="px-6 py-4 text-right space-x-2">
+                        <a href="{% url 'competitor:refresh' item.product.barcode %}"
+                           class="text-white bg-blue-600 hover:bg-blue-700 font-medium rounded-lg text-xs px-3 py-1.5">
+                            Refresh
+                        </a>
+                        <button
+                            class="trend-btn text-xs px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+                            data-barcode="{{ item.product.barcode }}">
+                            Trend
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-8 text-gray-500">
+                        No products found in this supermarket's price list.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Trend modal -->
+<div id="trendModal"
+     class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-lg w-full max-w-xl p-4">
+        <div class="flex justify-between items-center mb-2">
+            <h3 class="text-sm font-semibold text-gray-800">
+                Price Trend
+            </h3>
+            <button id="closeTrend" class="text-xs px-2 py-1 hover:bg-gray-100 rounded">
+                ✕
+            </button>
+        </div>
+        <canvas id="trendChart" height="200"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const searchInput = document.getElementById("searchInput");
+    const rows = Array.from(document.querySelectorAll(".product-row"));
+    const tableBody = document.querySelector("#comparisonTable tbody");
+    const diffHeader = document.getElementById("diffHeader");
+
+    // --- Search filter ---
+    searchInput.addEventListener("input", function () {
+        const q = this.value.toLowerCase();
+        rows.forEach(row => {
+            const haystack = row.dataset.search.toLowerCase();
+            row.style.display = haystack.includes(q) ? "" : "none";
+        });
+    });
+
+    // --- Sort by difference ---
+    let sortAsc = false;
+    diffHeader.addEventListener("click", function () {
+        sortAsc = !sortAsc;
+        const sorted = rows.slice().sort((a, b) => {
+            const da = parseFloat(a.dataset.diff || "0");
+            const db = parseFloat(b.dataset.diff || "0");
+            return sortAsc ? (da - db) : (db - da);
+        });
+        sorted.forEach(r => tableBody.appendChild(r));
+    });
+
+    // --- Trend modal & chart ---
+    const modal = document.getElementById("trendModal");
+    const closeBtn = document.getElementById("closeTrend");
+    const trendButtons = document.querySelectorAll(".trend-btn");
+    let chartInstance = null;
+
+    function openModal() {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+    }
+    function closeModal() {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+    }
+    closeBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    trendButtons.forEach(btn => {
+        btn.addEventListener("click", function () {
+            const barcode = this.dataset.barcode;
+            fetch("{% url 'competitor:trend_data' %}?barcode=" + encodeURIComponent(barcode))
+                .then(res => res.json())
+                .then(data => {
+                    const labels = data.points.map(p => p.date);
+                    const minPrices = data.points.map(p => p.min_price);
+                    const avgPrices = data.points.map(p => p.avg_price);
+
+                    const ctx = document.getElementById("trendChart").getContext("2d");
+                    if (chartInstance) {
+                        chartInstance.destroy();
+                    }
+                    chartInstance = new Chart(ctx, {
+                        type: "line",
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: "Min price",
+                                    data: minPrices,
+                                    borderWidth: 2,
+                                },
+                                {
+                                    label: "Avg price",
+                                    data: avgPrices,
+                                    borderWidth: 2,
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: false }
+                            }
+                        }
+                    });
+
+                    openModal();
+                });
+        });
+    });
+});
+</script>
+{% endblock %}

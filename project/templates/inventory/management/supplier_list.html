@@ -1,10 +1,146 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "inventory/base.html" %}
+{% block title %}Suppliers{% endblock %}
+{% block header %}Supplier Management{% endblock %}
+{% block content %}
 
-</body>
-</html>
+<!-- ADD NEW SUPPLIER -->
+<div class="bg-white rounded-xl shadow p-5 mb-6">
+    <h2 class="font-semibold text-lg text-gray-700 mb-3">Add Supplier</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="mode" value="create">
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input name="name" required placeholder="Supplier Name"
+                   class="border px-3 py-2 rounded w-full">
+            <input name="contact_person" placeholder="Contact Person"
+                   class="border px-3 py-2 rounded w-full">
+            <input type="email" name="email" placeholder="Email"
+                   class="border px-3 py-2 rounded w-full">
+            <input name="phone" placeholder="Phone Number"
+                   class="border px-3 py-2 rounded w-full">
+
+            <textarea name="address" placeholder="Address"
+                      class="border px-3 py-2 rounded w-full md:col-span-2"></textarea>
+        </div>
+
+        <button class="bg-green-600 text-white px-4 py-2 rounded mt-3 hover:bg-green-700">
+            Add Supplier
+        </button>
+    </form>
+</div>
+
+
+<!-- SUPPLIER LIST -->
+<div class="bg-white rounded-xl shadow p-5">
+    <h2 class="font-semibold text-lg text-gray-700 mb-3">Supplier List</h2>
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="bg-gray-100 border-b text-left">
+                <th class="p-2">Name</th>
+                <th class="p-2">Contact</th>
+                <th class="p-2">Email</th>
+                <th class="p-2">Phone</th>
+                <th class="p-2">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in suppliers %}
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="p-2 font-medium">{{ s.name }}</td>
+                    <td class="p-2">{{ s.contact_person }}</td>
+                    <td class="p-2 text-gray-600">{{ s.email }}</td>
+                    <td class="p-2">{{ s.phone }}</td>
+                    <td class="p-2">
+
+                        <!-- Edit Button -->
+                        <button onclick="openEditModal({{ s.id }}, '{{ s.name }}', '{{ s.contact_person|default:'' }}', '{{ s.email|default:'' }}', '{{ s.phone|default:'' }}', `{{ s.address|default:'' }}`)"
+                            class="px-3 py-1 text-blue-600 hover:text-blue-800">
+                            Edit
+                        </button>
+
+                        <!-- Delete Button -->
+                        <button onclick="confirmDelete({{ s.id }})"
+                            class="px-3 py-1 text-red-600 hover:text-red-800">
+                            Delete
+                        </button>
+
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-gray-500 p-4">
+                        No suppliers found
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+
+<!-- ============= EDIT MODAL ============= -->
+<div id="editModal"
+     class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+
+    <div class="bg-white rounded-lg shadow p-6 w-full max-w-lg">
+        <h3 class="font-bold text-gray-800 mb-4">Edit Supplier</h3>
+        <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="mode" value="edit">
+            <input type="hidden" id="edit_id" name="supplier_id">
+
+            <div class="grid grid-cols-1 gap-3">
+                <input id="edit_name" name="name" class="border rounded px-3 py-2" required>
+                <input id="edit_contact" name="contact_person" class="border rounded px-3 py-2">
+                <input id="edit_email" name="email" class="border rounded px-3 py-2">
+                <input id="edit_phone" name="phone" class="border rounded px-3 py-2">
+                <textarea id="edit_address" name="address"
+                          class="border rounded px-3 py-2"></textarea>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button"
+                        onclick="closeModal()"
+                        class="px-4 py-2 border rounded">
+                    Cancel
+                </button>
+
+                <button class="px-4 py-2 bg-blue-600 text-white rounded">
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<!-- ============= DELETE CONFIRM ============= -->
+<form method="POST" id="deleteForm">
+    {% csrf_token %}
+    <input type="hidden" name="mode" value="delete">
+    <input type="hidden" name="supplier_id" id="delete_id">
+</form>
+
+<script>
+function openEditModal(id, name, contact, email, phone, address) {
+    document.getElementById('editModal').classList.remove("hidden");
+    document.getElementById('edit_id').value = id;
+    document.getElementById('edit_name').value = name;
+    document.getElementById('edit_contact').value = contact;
+    document.getElementById('edit_email').value = email;
+    document.getElementById('edit_phone').value = phone;
+    document.getElementById('edit_address').value = address;
+}
+function closeModal() {
+    document.getElementById('editModal').classList.add("hidden");
+}
+function confirmDelete(id) {
+    if (confirm("Delete this supplier?")) {
+        document.getElementById('delete_id').value = id;
+        document.getElementById('deleteForm').submit();
+    }
+}
+</script>
+
+{% endblock %}

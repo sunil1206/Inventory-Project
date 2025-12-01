@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Competitor Prices{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+
+    <!-- PRODUCT HEADER -->
+    <section class="p-4 bg-white rounded-xl border shadow-sm">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-lg font-semibold text-gray-900">{{ product.name }}</h1>
+                {% if product.brand %}
+                <p class="text-sm text-gray-600">{{ product.brand }}</p>
+                {% endif %}
+                {% if product.barcode %}
+                <p class="text-xs text-gray-500 mt-1">EAN: {{ product.barcode }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Refresh trigger -->
+            <form method="post" action="{% url 'competitor:refresh' product.id %}">
+                {% csrf_token %}
+                <button class="text-xs px-3 py-1.5 bg-black text-white rounded-full">
+                    🔄 Refresh
+                </button>
+            </form>
+        </div>
+
+        {% if product.store_price %}
+        <p class="text-sm mt-2">
+            <span class="text-gray-500">Your Price: </span>
+            <span class="font-semibold text-emerald-700">{{ product.store_price }} €</span>
+        </p>
+        {% endif %}
+    </section>
+
+
+    <!-- COMPARISON TABLE -->
+    <section class="bg-white rounded-xl border shadow-sm p-3">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-600 text-xs">
+                <tr>
+                    <th class="p-2 text-left">Competitor</th>
+                    <th class="p-2 text-right">Price</th>
+                    <th class="p-2 text-right">Difference</th>
+                    <th class="p-2 text-left">Promo</th>
+                    <th class="p-2 text-right">Updated</th>
+                    <th class="p-2 text-left">Link</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y">
+            {% for row in rows %}
+                {% with snap=row.latest_snapshot %}
+                <tr>
+                    <td class="p-2">{{ row.competitor.name }}</td>
+
+                    <!-- Price -->
+                    <td class="p-2 text-right">
+                        {% if snap %}
+                            <span class="font-semibold">{{ snap.price }} €</span>
+                        {% else %}
+                            <span class="text-gray-400">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Difference -->
+                    <td class="p-2 text-right">
+                        {% if row.diff_amount is not None %}
+                            {% if row.diff_amount < 0 %}
+                                <span class="text-green-600">↓ {{ row.diff_amount|floatformat:2 }} €</span>
+                            {% elif row.diff_amount > 0 %}
+                                <span class="text-red-600">↑ +{{ row.diff_amount|floatformat:2 }} €</span>
+                            {% else %}
+                                <span class="text-gray-400">=</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="text-gray-400">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Promo -->
+                    <td class="p-2">
+                        {% if snap and snap.is_promo %}
+                            <span class="px-2 py-0.5 text-xs rounded bg-red-50 text-red-600">
+                                {{ snap.promo_text|default:"Promo" }}
+                            </span>
+                        {% else %}
+                            <span class="text-gray-400">—</span>
+                        {% endif %}
+                    </td>
+
+                    <!-- Time -->
+                    <td class="p-2 text-right text-xs text-gray-500">
+                        {% if snap %}
+                            {{ snap.scraped_at|date:"Y-m-d H:i" }}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+
+                    <!-- URL -->
+                    <td class="p-2">
+                        <a href="{{ row.competitor_product.product_url }}" target="_blank"
+                           class="text-blue-600 underline text-xs">Open</a>
+                    </td>
+                </tr>
+                {% endwith %}
+            {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center p-4 text-gray-500">
+                        No competitor mappings found.
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

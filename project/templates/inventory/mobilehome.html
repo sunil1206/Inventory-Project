@@ -1,0 +1,48 @@
+{% extends "inventory/base.html" %}
+{% block title %}Home{% endblock %}
+{% block header %}Home{% endblock %}
+
+{% block content %}
+<div class="p-4">
+
+    <div class="grid grid-cols-3 gap-4 text-center">
+
+        <a href="{% url 'inventory:scan_item' supermarket.id %}"
+           class="bg-white rounded-xl p-4 shadow-sm flex flex-col items-center gap-2 hover:scale-105">
+            <i class="fa-solid fa-qrcode text-3xl text-green-600"></i>
+            <span class="text-sm font-medium">Scan Items</span>
+        </a>
+
+        <a href="{% url 'inventory:inventory_list' supermarket.id %}"
+           class="bg-white rounded-xl p-4 shadow-sm flex flex-col items-center gap-2 hover:scale-105">
+            <i class="fa-solid fa-box text-3xl text-blue-600"></i>
+            <span class="text-sm font-medium">Inventory</span>
+        </a>
+
+        <a href="{% url 'packaging:order_builder' supermarket.id %}"
+           class="bg-white rounded-xl p-4 shadow-sm flex flex-col items-center gap-2 hover:scale-105">
+            <i class="fa-solid fa-truck text-3xl text-orange-600"></i>
+            <span class="text-sm font-medium">Orders</span>
+        </a>
+
+        <a href="{% url 'packaging:scan_unit' supermarket.id %}"
+           class="bg-white rounded-xl p-4 shadow-sm flex flex-col items-center gap-2 hover:scale-105">
+            <i class="fa-solid fa-barcode text-3xl text-purple-600"></i>
+            <span class="text-sm font-medium">Packing</span>
+        </a>
+
+        <a href="{% url 'ticket:ticket_list' supermarket.id %}"
+           class="bg-white rounded-xl p-4 shadow-sm flex flex-col items-center gap-2 hover:scale-105">
+            <i class="fa-solid fa-ticket text-3xl text-red-500"></i>
+            <span class="text-sm font-medium">Labels</span>
+        </a>
+
+        <a href="{% url 'inventory:competitive_pricing' supermarket.id %}"
+           class="bg-white rounded-xl p-4 shadow-sm flex flex-col items-center gap-2 hover:scale-105">
+            <i class="fa-solid fa-scale-balanced text-3xl text-teal-600"></i>
+            <span class="text-sm font-medium">Competitors</span>
+        </a>
+    </div>
+
+</div>
+{% endblock %}

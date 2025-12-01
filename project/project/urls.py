@@ -38,7 +38,9 @@ path('users/', include('users.urls')),
 path('pricing/', include('pricing.urls')),
 path('product_price/', include('product_price.urls')),
 path("packaging/", include("order.urls")),
-
+path("ticket/", include("Tickettheme.urls")),
+path("analytics/", include("analytics.urls")),
+path("competitor/", include("competitor.urls", namespace="competitor")),
 
 ]
 

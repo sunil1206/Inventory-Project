@@ -8,57 +8,53 @@ from Inventory.models import Product, Supermarket, Supplier
 
 class ProductPackaging(models.Model):
     """
-    Maps a UNIT barcode (consumer unit / CU) to an optional CARTON barcode (distribution unit / DU).
-    You only enter the unit barcode when creating a Product.
-    Carton barcode and units_per_carton can be added later when you scan the carton.
+    Maps a UNIT barcode (consumer unit / CU) to one or more CARTON barcodes (DU).
+    Only superadmins should create/update these (enforced in views/admin).
     """
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
-        related_name="packaging_options"
+        related_name="packaging_options",
     )
 
-    # Usually same as Product.barcode
     unit_barcode = models.CharField(
         max_length=50,
-        help_text="Consumer Unit (CU) barcode — EAN-13"
+        help_text="Consumer Unit (CU) barcode — usually same as Product.barcode",
     )
 
-    # Optional until you scan the carton
     carton_barcode = models.CharField(
         max_length=50,
-        null=True, blank=True,
-        help_text="Distribution Unit (DU) barcode — GTIN-14 / Code128 / internal"
+        help_text="Distribution Unit (DU) barcode — GTIN-14 / Code128 / internal",
     )
 
     units_per_carton = models.PositiveIntegerField(
-        null=True, blank=True,
-        help_text="How many units in one carton (DU)."
+        help_text="How many units in one carton (DU).",
     )
 
     supplier = models.ForeignKey(
         Supplier,
         on_delete=models.SET_NULL,
-        null=True, blank=True
+        null=True,
+        blank=True,
+        help_text="Optional default supplier for this pack size.",
     )
+
+    is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['unit_barcode', 'carton_barcode']
+        unique_together = ("product", "unit_barcode", "carton_barcode")
         verbose_name = "Product Packaging"
         verbose_name_plural = "Product Packaging"
 
     def __str__(self):
-        base = f"{self.product.name} packaging"
-        if self.units_per_carton:
-            return f"{base} - {self.units_per_carton} units/carton"
-        return base
+        return f"{self.product.name} / {self.units_per_carton} units per carton"
 
 
 class OrderBatch(models.Model):
     """
-    One order document (for a supplier) containing multiple lines.
+    One supplier order document per supermarket.
     """
     STATUS_CHOICES = [
         ("draft", "Draft"),
@@ -68,29 +64,35 @@ class OrderBatch(models.Model):
     supermarket = models.ForeignKey(
         Supermarket,
         on_delete=models.CASCADE,
-        related_name="order_batches"
+        related_name="order_batches",
     )
+
     supplier = models.ForeignKey(
         Supplier,
         on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="order_batches"
+        null=True,
+        blank=True,
+        related_name="order_batches",
     )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="order_batches"
+        related_name="order_batches",
     )
+
     reference = models.CharField(
         max_length=100,
         blank=True,
-        help_text="Optional internal reference / note for this order."
+        help_text="Optional internal reference / note for this order.",
     )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default="draft"
+        default="draft",
     )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -109,38 +111,55 @@ class OrderLine(models.Model):
     batch = models.ForeignKey(
         OrderBatch,
         on_delete=models.CASCADE,
-        related_name="lines"
+        related_name="lines",
     )
+
     product = models.ForeignKey(
         Product,
         on_delete=models.CASCADE,
-        related_name="order_lines"
+        related_name="order_lines",
     )
+
+    # Which CU barcode we scanned (shelf label)
     unit_barcode = models.CharField(
         max_length=50,
-        help_text="Consumer unit barcode (EAN-13)."
+        help_text="Consumer unit barcode (EAN-13).",
     )
-    carton_barcode = models.CharField(
-        max_length=50,
-        null=True, blank=True,
-        help_text="Carton barcode if mapped."
+
+    # Which carton config we are using (may be null if no mapping yet)
+    packaging = models.ForeignKey(
+        ProductPackaging,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="order_lines",
     )
-    units_per_carton = models.PositiveIntegerField(
-        null=True, blank=True,
-        help_text="How many units in one carton."
-    )
+
     cartons = models.PositiveIntegerField(
         default=0,
-        help_text="Number of cartons ordered."
+        help_text="Number of cartons ordered.",
     )
 
     class Meta:
-        unique_together = ["batch", "product", "unit_barcode"]
+        unique_together = ("batch", "product", "unit_barcode", "packaging")
 
     def __str__(self):
         return f"{self.product.name} x {self.cartons} cartons"
 
     @property
+    def units_per_carton(self) -> int:
+        if self.packaging and self.packaging.units_per_carton:
+            return self.packaging.units_per_carton
+        return 1
+
+    @property
+    def carton_barcode(self) -> str:
+        if self.packaging:
+            return self.packaging.carton_barcode
+        return ""
+
+    @property
     def total_units(self) -> int:
-        upc = self.units_per_carton or 1
-        return self.cartons * upc
+        return self.cartons * self.units_per_carton
+
+

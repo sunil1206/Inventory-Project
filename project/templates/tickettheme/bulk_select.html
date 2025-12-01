@@ -1,0 +1,162 @@
+{% extends "inventory/base.html" %}
+{% block title %}Bulk Label Print{% endblock %}
+{% block header %}Bulk Ticket Creator{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto space-y-6 pb-20">
+
+    <!--===================== SCAN SECTION =====================-->
+    <div class="bg-white rounded-xl shadow p-5 space-y-3">
+
+        <h2 class="text-lg font-semibold text-gray-800">
+            📦 Scan Products to Add Tickets
+        </h2>
+
+        <!-- SCANNER -->
+        <div id="scannerBox"
+             class="relative w-full h-72 rounded-xl bg-black overflow-hidden flex items-center justify-center">
+
+            <div id="qr-reader" class="w-full h-full text-white text-center"></div>
+
+            <!-- Overlay START button -->
+            <button id="startScanBtn"
+                class="absolute inset-0 flex flex-col items-center justify-center
+                       bg-black bg-opacity-70 text-white font-semibold text-xl">
+                📷 Tap to Start Camera
+                <span class="text-sm opacity-80 mt-2">Scan Unit Barcode</span>
+            </button>
+        </div>
+
+        <!-- Scan status -->
+        <p id="scanStatus" class="text-center text-gray-500 text-sm"></p>
+
+        <!-- Manual fallback -->
+        <form method="POST" class="flex gap-2 pt-2">
+            {% csrf_token %}
+            <input name="barcode"
+                   class="flex-1 border rounded-lg px-3 py-2 text-sm"
+                   placeholder="Type or paste barcode…">
+            <button
+                class="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium">
+                ➕ Add
+            </button>
+        </form>
+    </div>
+
+
+    <!--===================== QUEUE =====================-->
+    <div class="bg-white rounded-xl shadow p-5 space-y-4">
+        <h2 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            🧾 Label Queue
+        </h2>
+
+        {% if queue_items %}
+            <div class="space-y-3 text-sm">
+                {% for item in queue_items %}
+                <div class="flex items-center justify-between
+                            border rounded-lg px-3 py-2 shadow-sm">
+                    <div>
+                        <div class="font-semibold text-gray-800">{{ item.product.name }}</div>
+                        <div class="text-xs text-gray-500">{{ item.product.barcode }}</div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+
+                        <a href="{% url 'ticket:ticket_create' supermarket.id item.product.id %}"
+                           class="px-2 py-1 bg-green-600 text-white text-xs rounded-lg">
+                           ⚙️ Edit
+                        </a>
+
+                        <a href="{% url 'ticket:ticket_remove' supermarket.id item.id %}"
+                           class="px-2 py-1 bg-red-500 text-white text-xs rounded-lg">
+                           ❌
+                        </a>
+
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 text-sm">
+                Scan a product to add its ticket to the bulk list.
+            </p>
+        {% endif %}
+    </div>
+
+
+    <!--===================== A4 LAYOUT =====================-->
+    <div class="bg-white rounded-xl shadow p-5 space-y-4">
+        <h2 class="text-lg font-semibold text-gray-800">
+            🖨️ Choose Layout
+        </h2>
+
+        <form action="{% url 'ticket:bulk_ticket_pdf' supermarket.id %}"
+              method="POST" class="space-y-3">
+            {% csrf_token %}
+
+            <select name="sheet" class="w-full border rounded-lg px-4 py-3 text-sm">
+                {% for s in sheets %}
+                    <option value="{{ s.id }}">
+                        {{ s.name }} — {{ s.cols }}×{{ s.rows }} labels ({{ s.label_width_mm }}×{{ s.label_height_mm }}mm)
+                    </option>
+                {% endfor %}
+            </select>
+
+            <button
+                class="w-full bg-green-600 text-white py-3 rounded-lg text-lg font-semibold">
+                📄 Generate A4 PDF
+            </button>
+        </form>
+    </div>
+
+</div>
+
+<!-- FAB like app -->
+<a href="{% url 'inventory:dashboard' %}"
+   class="fixed bottom-4 left-4 bg-gray-800 text-white rounded-full p-3 text-lg shadow-lg">
+    ←
+</a>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+const scanButton = document.getElementById("startScanBtn");
+const scannerBox = document.getElementById("scannerBox");
+const scanStatus = document.getElementById("scanStatus");
+
+let scanner = null;
+
+scanButton.addEventListener("click", function () {
+    if (scanner) return;
+
+    scanButton.classList.add("hidden");
+    scanStatus.textContent = "Starting camera…";
+
+    scanner = new Html5Qrcode("qr-reader");
+
+    scanner.start(
+        { facingMode: "environment" },
+        { fps: 15, qrbox: { width: 280, height: 280 } },
+        function(barcode) {
+            if (navigator.vibrate) navigator.vibrate(50);
+
+            scanStatus.textContent = "Scanned: " + barcode;
+
+            fetch("{% url 'ticket:scan_add' supermarket.id %}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": "{{ csrf_token }}"
+                },
+                body: JSON.stringify({ barcode })
+            }).then(() => location.reload());
+        }
+    ).catch(err => {
+        scanStatus.textContent = "Camera failed: " + err;
+        scanButton.classList.remove("hidden");
+    });
+});
+</script>
+{% endblock %}

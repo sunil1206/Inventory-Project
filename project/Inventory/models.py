@@ -179,17 +179,26 @@ class InventoryItem(models.Model):
             return 'fresh'
 
 
+# Inventory/models.py
 
 class ProductPrice(models.Model):
     """
     Represents the default, user-defined price for a specific product
     at a specific supermarket. This is our main "Price List" table.
     """
-    product = models.ForeignKey('Inventory.Product', on_delete=models.SET_NULL, null=True, related_name='price_listings')
-    supermarket = models.ForeignKey('Inventory.Supermarket', on_delete=models.CASCADE, related_name='product_prices')
-    product = models.ForeignKey('Inventory.Product', on_delete=models.CASCADE, related_name='price_listings')
-    price = models.DecimalField(max_digits=5, decimal_places=2,null=True, blank=True)
-    # --- ADD THESE TWO NEW FIELDS ---
+    product = models.ForeignKey(
+        'Inventory.Product',
+        on_delete=models.CASCADE,
+        related_name='price_listings'
+    )
+    supermarket = models.ForeignKey(
+        'Inventory.Supermarket',
+        on_delete=models.CASCADE,
+        related_name='product_prices'
+    )
+    price = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+
+    # --- NEW FIELDS ---
     default_category = models.ForeignKey(
         'Inventory.Category',
         on_delete=models.SET_NULL,
@@ -202,13 +211,14 @@ class ProductPrice(models.Model):
         null=True, blank=True,
         help_text="The default rack for this product at this supermarket."
     )
+
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # A product can only have one default price per supermarket
         unique_together = ['supermarket', 'product']
         ordering = ['product__name']
 
     def __str__(self):
         return f"{self.product.name} at {self.supermarket.name}: {self.price}"
+
 
