@@ -76,6 +76,7 @@ class PricingRule(models.Model):
 #
 #     def __str__(self):
 #         return f"{self.name} ({self.start_date.date()} to {self.end_date.date()})"
+from django.utils import timezone
 
 class Promotion(models.Model):
     """
@@ -99,7 +100,7 @@ class Promotion(models.Model):
     )
 
     name = models.CharField(max_length=255)
-    start_date = models.DateTimeField()
+    start_date = models.DateTimeField(default=timezone.now)
     end_date = models.DateTimeField()
 
     discount_type = models.CharField(max_length=20, choices=DiscountType.choices)
