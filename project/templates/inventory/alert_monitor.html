@@ -1,478 +1,661 @@
+<!--{% extends "inventory/base.html" %}-->
+<!--{% load static %} {% block title %}Alert Monitor{% endblock %}-->
+<!--{% block header %}Urgent Items - {{ supermarket.name }}{% endblock %}-->
+
+<!--{% block content %}-->
+<!--<div class="mb-6">-->
+<!--    {% include 'includes/alerts.html' %}-->
+<!--</div>-->
+
+<!--<div class="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">-->
+<!--    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">-->
+<!--        <div>-->
+<!--            <label for="filter-category" class="block text-sm font-medium text-gray-700">Filter by Category</label>-->
+<!--            <select id="filter-category" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">-->
+<!--                <option value="all">All Categories</option>-->
+<!--                {% for category in available_categories %}-->
+<!--                <option value="{{ category.id }}">{{ category.name }}</option>-->
+<!--                {% endfor %}-->
+<!--            </select>-->
+<!--        </div>-->
+<!--        <div>-->
+<!--            <label for="filter-rack" class="block text-sm font-medium text-gray-700">Filter by Rack</label>-->
+<!--            <select id="filter-rack" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">-->
+<!--                <option value="all">All Racks</option>-->
+<!--                {% for rack in available_racks %}-->
+<!--                <option value="{{ rack.id }}">{{ rack.name }}</option>-->
+<!--                {% endfor %}-->
+<!--            </select>-->
+<!--        </div>-->
+<!--        <div>-->
+<!--            <label for="filter-date" class="block text-sm font-medium text-gray-700">Filter by Expiry Date</label>-->
+<!--            <input type="date" id="filter-date" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">-->
+<!--        </div>-->
+<!--        <div class="md:mt-6">-->
+<!--            <button id="clear-filters-btn" type="button" class="w-full md:w-auto px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">-->
+<!--                Clear Filters-->
+<!--            </button>-->
+<!--        </div>-->
+<!--    </div>-->
+<!--</div>-->
+<!--<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">-->
+
+<!--    <div class="bg-red-50 rounded-lg p-4 shadow-sm">-->
+<!--        <h2 class="font-bold text-lg text-red-800 mb-4 flex items-center">-->
+<!--            <i class="fas fa-times-circle mr-2"></i>-->
+<!--            Expired (<span id="expired-count">{{ expired_items|length }}</span>)-->
+<!--        </h2>-->
+<!--        <div id="expired-list" class="space-y-4 max-h-[70vh] overflow-y-auto p-1">-->
+<!--            {% for item in expired_items %}-->
+<!--            <div class="bg-white rounded-lg shadow-md overflow-hidden item-card"-->
+<!--                 data-category-id="{{ item.get_category.id|default:'' }}"-->
+<!--                 data-rack="{{ item.rack.id|default:'' }}"  data-expiry-date="{{ item.expiry_date|date:'Y-m-d' }}">-->
+<!--                <div class="p-4">-->
+<!--                    <div class="flex gap-4">-->
+<!--                        <img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">-->
+<!--                        <div class="flex-grow">-->
+<!--                            <p class="font-bold text-gray-800">{{ item.product.name }}</p>-->
+<!--                            <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>-->
+<!--                            <p class="text-sm font-semibold text-red-600 mt-1">-->
+<!--                                Expired {{ item.days_since_expiry }} day{{ item.days_since_expiry|pluralize }} ago-->
+<!--                            </p>-->
+<!--                            <p class="text-sm text-gray-500">Qty: {{ item.quantity }} | Rack: {{ item.rack.name|default:'N/A' }}</p>-->
+<!--                        </div>-->
+<!--                    </div>-->
+<!--                    <div class="mt-4 pt-4 border-t flex justify-end gap-2">-->
+<!--                         <button type="button"-->
+<!--                                 onclick="openWastageModal({{ item.id }})"-->
+<!--                                 class="text-xs font-semibold bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">-->
+<!--                            Remove (Wastage)-->
+<!--                         </button>-->
+
+
+<!--                <button type="button"-->
+<!--                        onclick="openSellModal({{ item.id }})"-->
+<!--                        class="text-xs font-semibold bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-700">-->
+<!--                    Sell / Manage-->
+<!--                </button>-->
+
+<!--                    </div>-->
+<!--                </div>-->
+<!--            </div>-->
+<!--            {% empty %}-->
+<!--            <div id="no-expired-msg" class="text-center p-4 text-sm text-gray-500">-->
+<!--                No expired items.-->
+<!--            </div>-->
+<!--            {% endfor %}-->
+<!--        </div>-->
+<!--    </div>-->
+<!--    <div class="bg-orange-50 rounded-lg p-4 shadow-sm">-->
+<!--        <h2 class="font-bold text-lg text-orange-800 mb-4 flex items-center">-->
+<!--            <i class="fas fa-exclamation-circle mr-2"></i>-->
+<!--            Expires Today (<span id="today-count">{{ expires_today_items|length }}</span>)-->
+<!--        </h2>-->
+<!--        <div id="today-list" class="space-y-4 max-h-[70vh] overflow-y-auto p-1">-->
+<!--            {% for item in expires_today_items %}-->
+<!--                {% include "pricing/partials/_urgent_item_card.html" with item=item %}-->
+<!--            {% empty %}-->
+<!--                 <div id="no-today-msg" class="text-center p-4 text-sm text-gray-500">No items expiring today.</div>-->
+<!--            {% endfor %}-->
+<!--        </div>-->
+<!--    </div>-->
+<!--    <div class="bg-yellow-50 rounded-lg p-4 shadow-sm">-->
+<!--        <h2 class="font-bold text-lg text-yellow-800 mb-4 flex items-center">-->
+<!--            <i class="fas fa-info-circle mr-2"></i>-->
+<!--            Expires Soon (2-7 Days) (<span id="soon-count">{{ expires_soon_items|length }}</span>)-->
+<!--        </h2>-->
+<!--        <div id="soon-list" class="space-y-4 max-h-[70vh] overflow-y-auto p-1">-->
+<!--            {% for item in expires_soon_items %}-->
+<!--                {% include "pricing/partials/_urgent_item_card.html" with item=item %}-->
+<!--            {% empty %}-->
+<!--                 <div id="no-soon-msg" class="text-center p-4 text-sm text-gray-500">No items expiring soon.</div>-->
+<!--            {% endfor %}-->
+<!--        </div>-->
+<!--    </div>-->
+<!--    </div>-->
+
+<!--{% if total_urgent_count == 0 %}-->
+<!--<div class="bg-white p-8 rounded-lg shadow-lg text-center mt-6">-->
+<!--    <div class="text-green-500 mb-4">-->
+<!--        <i class="fas fa-check-circle fa-3x"></i>-->
+<!--    </div>-->
+<!--    <h3 class="text-xl font-bold text-gray-800">No Urgent Items</h3>-->
+<!--    <p class="text-gray-600 mt-2">Your inventory is in great shape! There are no items that are expired or expiring within the next 7 days.</p>-->
+<!--</div>-->
+<!--{% endif %}-->
+
+
+<!--<div id="sell-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">-->
+<!--    <div class="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">-->
+<!--        <form id="sell-form" method="POST">-->
+<!--            {% csrf_token %}-->
+<!--            <div class="flex justify-between items-center mb-4">-->
+<!--                <h3 class="text-2xl font-bold text-gray-900" id="sell-modal-title">Sell / Manage Item</h3>-->
+<!--                <button type="button" onclick="closeSellModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>-->
+<!--            </div>-->
+
+<!--            <div class="space-y-4">-->
+<!--                <p>You have <strong id="modal-item-quantity" class="text-blue-600"></strong> units of <strong id="modal-item-name" class="text-blue-600"></strong>.</p>-->
+
+<!--                <div>-->
+<!--                    <label for="modal-quantity-sold" class="block text-sm font-medium text-gray-700">Quantity to Sell</label>-->
+<!--                    <input type="number" name="quantity_sold" id="modal-quantity-sold" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">-->
+<!--                </div>-->
+
+<!--                <div class="grid grid-cols-2 gap-4">-->
+<!--                    <div>-->
+<!--                        <label class="block text-sm font-medium text-gray-700">Original Price (€)</label>-->
+<!--                        <input type="text" id="modal-original-price" disabled class="mt-1 w-full p-2 border border-gray-300 rounded-md bg-gray-100">-->
+<!--                    </div>-->
+<!--                    <div>-->
+<!--                        <label for="modal-final-price" class="block text-sm font-medium text-gray-700">Final Price (€)</label>-->
+<!--                        <input type="number" step="0.01" name="final_price" id="modal-final-price" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">-->
+<!--                    </div>-->
+<!--                </div>-->
+
+<!--                <div>-->
+<!--                    <label for="modal-discount-select" class="block text-sm font-medium text-gray-700">Apply Discount (Optional)</label>-->
+<!--                    <select id="modal-discount-select" class="mt-1 w-full p-2 border border-gray-300 rounded-md">-->
+<!--                        <option value="">No Discount (Manual Price)</option>-->
+<!--                        {% if active_rules %}-->
+<!--                        <optgroup label="Pricing Rules">-->
+<!--                            {% for rule in active_rules %}-->
+<!--                                <option value="rule-{{ rule.id }}">{{ rule.name }} ({{ rule.amount }}%)</option>-->
+<!--                            {% endfor %}-->
+<!--                        </optgroup>-->
+<!--                        {% endif %}-->
+<!--                        {% if active_promotions %}-->
+<!--                        <optgroup label="Promotions">-->
+<!--                            {% for promo in active_promotions %}-->
+<!--                                <option value="promotion-{{ promo.id }}">{{ promo.name }}</option>-->
+<!--                            {% endfor %}-->
+<!--                        </optgroup>-->
+<!--                        {% endif %}-->
+<!--                    </select>-->
+<!--                </div>-->
+
+<!--                <input type="hidden" name="discount_type" id="modal-discount-type">-->
+<!--                <input type="hidden" name="discount_id" id="modal-discount-id">-->
+<!--            </div>-->
+
+<!--            <div class="mt-6 flex justify-end gap-3">-->
+<!--                <button type="button" onclick="closeSellModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>-->
+<!--                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Log Sale & Update Stock</button>-->
+<!--            </div>-->
+<!--        </form>-->
+<!--    </div>-->
+<!--</div>-->
+<!--<div id="wastage-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">-->
+<!--    <div class="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">-->
+<!--        <form id="wastage-form" method="POST">-->
+<!--            {% csrf_token %}-->
+<!--            <div class="flex justify-between items-center mb-4">-->
+<!--                <h3 class="text-2xl font-bold text-gray-900">Remove Wastage</h3>-->
+<!--                <button type="button" onclick="closeWastageModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>-->
+<!--            </div>-->
+
+<!--            <div class="space-y-4">-->
+<!--                <p>You have <strong id="wastage-modal-quantity" class="text-red-600"></strong> units of <strong id="wastage-modal-name" class="text-red-600"></strong>.</p>-->
+
+<!--                <div>-->
+<!--                    <label for="modal-quantity-wasted" class="block text-sm font-medium text-gray-700">Quantity to Remove</label>-->
+<!--                    <input type="number" name="quantity_wasted" id="modal-quantity-wasted" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">-->
+<!--                </div>-->
+<!--            </div>-->
+
+<!--            <div class="mt-6 flex justify-end gap-3">-->
+<!--                <button type="button" onclick="closeWastageModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>-->
+<!--                <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Log Wastage & Update Stock</button>-->
+<!--            </div>-->
+<!--        </form>-->
+<!--    </div>-->
+<!--</div>-->
+<!--{% endblock %}-->
+
+<!--{% block extra_js %}-->
+<!--<script>-->
+<!--    // -&#45;&#45; Global Data & Elements -&#45;&#45;-->
+<!--    const supermarketId = {{ supermarket.id }};-->
+<!--    const csrfToken = '{{ csrf_token }}';-->
+
+<!--    // Modals-->
+<!--    const sellModal = document.getElementById('sell-modal');-->
+<!--    const sellForm = document.getElementById('sell-form');-->
+<!--    const discountSelect = document.getElementById('modal-discount-select');-->
+<!--    const discountTypeInput = document.getElementById('modal-discount-type');-->
+<!--    const discountIdInput = document.getElementById('modal-discount-id');-->
+
+<!--    const wastageModal = document.getElementById('wastage-modal');-->
+<!--    const wastageForm = document.getElementById('wastage-form');-->
+
+<!--    // Client-side Filter Elements-->
+<!--    const filterCategory = document.getElementById('filter-category');-->
+<!--    const filterRack = document.getElementById('filter-rack');-->
+<!--    const filterDate = document.getElementById('filter-date');-->
+<!--    const clearFiltersBtn = document.getElementById('clear-filters-btn');-->
+
+<!--    // -&#45;&#45; allItems Object (FIXED) -&#45;&#45;-->
+<!--    // Stores data for modals. Loops over all items passed from the view.-->
+<!--    const allItems = {-->
+<!--        {% for item in expired_items %}-->
+<!--            "{{ item.id }}": {-->
+<!--                id: {{ item.id }},-->
+<!--                name: "{{ item.product.name|escapejs }}",-->
+<!--                quantity: {{ item.quantity }},-->
+<!--                store_price: "{{ item.store_price|stringformat:'.2f'|default:'0.00' }}",-->
+<!--                suggested_price: "{{ item.suggested_price|stringformat:'.2f'|default:item.store_price|stringformat:'.2f'|default:'0.00' }}",-->
+<!--                applied_rule_id: "{{ item.applied_rule.id|default:'' }}",-->
+<!--                promotion_id: "{{ item.promotion.id|default:'' }}",-->
+<!--                category_id: "{{ item.get_category.id|default:'' }}",-->
+<!--                rack: "{{ item.rack.id|default:'' }}" // Fixed: Use rack.id-->
+<!--            },-->
+<!--        {% endfor %}-->
+<!--        {% for item in expires_today_items %}-->
+<!--            "{{ item.id }}": {-->
+<!--                id: {{ item.id }},-->
+<!--                name: "{{ item.product.name|escapejs }}",-->
+<!--                quantity: {{ item.quantity }},-->
+<!--                store_price: "{{ item.store_price|stringformat:'.2f'|default:'0.00' }}",-->
+<!--                suggested_price: "{{ item.suggested_price|stringformat:'.2f'|default:item.store_price|stringformat:'.2f'|default:'0.00' }}",-->
+<!--                applied_rule_id: "{{ item.applied_rule.id|default:'' }}",-->
+<!--                promotion_id: "{{ item.promotion.id|default:'' }}",-->
+<!--                category_id: "{{ item.get_category.id|default:'' }}",-->
+<!--                rack: "{{ item.rack.id|default:'' }}" // Fixed: Use rack.id-->
+<!--            },-->
+<!--        {% endfor %}-->
+<!--        {% for item in expires_soon_items %}-->
+<!--            "{{ item.id }}": {-->
+<!--                id: {{ item.id }},-->
+<!--                name: "{{ item.product.name|escapejs }}",-->
+<!--                quantity: {{ item.quantity }},-->
+<!--                store_price: "{{ item.store_price|stringformat:'.2f'|default:'0.00' }}",-->
+<!--                suggested_price: "{{ item.suggested_price|stringformat:'.2f'|default:item.store_price|stringformat:'.2f'|default:'0.00' }}",-->
+<!--                applied_rule_id: "{{ item.applied_rule.id|default:'' }}",-->
+<!--                promotion_id: "{{ item.promotion.id|default:'' }}",-->
+<!--                category_id: "{{ item.get_category.id|default:'' }}",-->
+<!--                rack: "{{ item.rack.id|default:'' }}" // Fixed: Use rack.id-->
+<!--            },-->
+<!--        {% endfor %}-->
+<!--    };-->
+
+<!--    // -&#45;&#45; allDiscounts Object -&#45;&#45;-->
+<!--    // Stores discount data from the view context for dynamic price calculation-->
+<!--    let allDiscounts = {-->
+<!--        rules: [-->
+<!--            {% for rule in active_rules %}-->
+<!--            { id: {{ rule.id }}, name: "{{ rule.name|escapejs }}", amount: {{ rule.amount }}, details: "{{ rule.amount }}%", discount_type: "PERCENTAGE" },-->
+<!--            {% endfor %}-->
+<!--        ],-->
+<!--        promotions: [-->
+<!--            {% for promo in active_promotions %}-->
+<!--            // Assuming Promotion model has 'discount_value' and 'discount_type'-->
+<!--            { id: {{ promo.id }}, name: "{{ promo.name|escapejs }}", amount: {{ promo.discount_value }}, details: "{{ promo.get_discount_display }}", discount_type: "{{ promo.discount_type }}" },-->
+<!--            {% endfor %}-->
+<!--        ]-->
+<!--    };-->
+<!--    let currentItem = null; // Stores the item being edited in a modal-->
+
+
+<!--    // -&#45;&#45; Sell Modal Controls -&#45;&#45;-->
+<!--    window.openSellModal = function(itemId) {-->
+<!--        currentItem = allItems[itemId];-->
+<!--        if (!currentItem) return;-->
+
+<!--        // Set form action URL-->
+<!--        sellForm.action = `/pricing/${supermarketId}/item/${currentItem.id}/sell/`;-->
+
+<!--        document.getElementById('modal-item-name').textContent = currentItem.name;-->
+<!--        document.getElementById('modal-item-quantity').textContent = currentItem.quantity;-->
+
+<!--        const quantityInput = document.getElementById('modal-quantity-sold');-->
+<!--        quantityInput.value = 1; // Default to 1-->
+<!--        quantityInput.max = currentItem.quantity;-->
+
+<!--        document.getElementById('modal-original-price').value = currentItem.store_price;-->
+<!--        document.getElementById('modal-final-price').value = currentItem.suggested_price;-->
+
+<!--        // Pre-select the discount if one was applied-->
+<!--        if (currentItem.applied_rule_id) {-->
+<!--            discountSelect.value = `rule-${currentItem.applied_rule_id}`;-->
+<!--        } else if (currentItem.promotion_id) {-->
+<!--            discountSelect.value = `promo-${currentItem.promotion_id}`;-->
+<!--        } else {-->
+<!--            discountSelect.value = "";-->
+<!--        }-->
+
+<!--        // Trigger change event to set hidden fields and calculate price-->
+<!--        discountSelect.dispatchEvent(new Event('change'));-->
+
+<!--        sellModal.classList.remove('hidden');-->
+<!--    }-->
+
+<!--    window.closeSellModal = function() {-->
+<!--        sellModal.classList.add('hidden');-->
+<!--        sellForm.reset();-->
+<!--        discountTypeInput.value = '';-->
+<!--        discountIdInput.value = '';-->
+<!--        currentItem = null;-->
+<!--    }-->
+
+<!--    // -&#45;&#45; Wastage Modal Controls -&#45;&#45;-->
+<!--    window.openWastageModal = function(itemId) {-->
+<!--        currentItem = allItems[itemId];-->
+<!--        if (!currentItem) return;-->
+
+<!--        // Set form action URL-->
+<!--        wastageForm.action = `/pricing/${supermarketId}/item/${currentItem.id}/wastage/`;-->
+
+<!--        document.getElementById('wastage-modal-name').textContent = currentItem.name;-->
+<!--        document.getElementById('wastage-modal-quantity').textContent = currentItem.quantity;-->
+
+<!--        const quantityInput = document.getElementById('modal-quantity-wasted');-->
+<!--        quantityInput.value = currentItem.quantity; // Default to full quantity-->
+<!--        quantityInput.max = currentItem.quantity;-->
+
+<!--        wastageModal.classList.remove('hidden');-->
+<!--    }-->
+
+<!--    window.closeWastageModal = function() {-->
+<!--        wastageModal.classList.add('hidden');-->
+<!--        wastageForm.reset();-->
+<!--        currentItem = null;-->
+<!--    }-->
+
+
+<!--    // -&#45;&#45; Dynamic Price Calculation (for Sell Modal) -&#45;&#45;-->
+<!--    discountSelect.addEventListener('change', function() {-->
+<!--        // Set hidden fields-->
+<!--        const selectedValue = this.value;-->
+<!--        if (selectedValue) {-->
+<!--            const [type, id] = selectedValue.split('-');-->
+<!--            discountTypeInput.value = type;-->
+<!--            discountIdInput.value = id;-->
+<!--        } else {-->
+<!--            discountTypeInput.value = '';-->
+<!--            discountIdInput.value = '';-->
+<!--        }-->
+
+<!--        // Calculate price-->
+<!--        if (!currentItem || !currentItem.store_price) return;-->
+
+<!--        const finalPriceInput = document.getElementById('modal-final-price');-->
+<!--        const originalPrice = parseFloat(document.getElementById('modal-original-price').value);-->
+
+<!--        if (selectedValue === "") {-->
+<!--            finalPriceInput.value = currentItem.suggested_price;-->
+<!--            return;-->
+<!--        }-->
+
+<!--        const [type, id] = selectedValue.split('-');-->
+<!--        let discountData = null;-->
+
+<!--        if (type === 'rule') {-->
+<!--            discountData = allDiscounts.rules.find(r => r.id == id);-->
+<!--        } else {-->
+<!--            discountData = allDiscounts.promotions.find(p => p.id == id);-->
+<!--        }-->
+
+<!--        if (!discountData) return;-->
+
+<!--        let newPrice;-->
+<!--        if (discountData.discount_type === 'PERCENTAGE') {-->
+<!--            const discountMultiplier = (100 - parseFloat(discountData.amount)) / 100;-->
+<!--            newPrice = (originalPrice * discountMultiplier);-->
+<!--        } else { // Fixed Amount-->
+<!--            newPrice = (originalPrice - parseFloat(discountData.amount));-->
+<!--        }-->
+
+<!--        newPrice = Math.round(newPrice * 100) / 100; // Round to 2 decimal places-->
+<!--        finalPriceInput.value = newPrice < 0 ? 0.00 : newPrice.toFixed(2);-->
+<!--    });-->
+
+<!--    // -&#45;&#45; Client-Side Filter Logic -&#45;&#45;-->
+<!--    function applyFilters() {-->
+<!--        const selectedCategory = filterCategory.value;-->
+<!--        const selectedRack = filterRack.value;-->
+<!--        const selectedDate = filterDate.value;-->
+
+<!--        function filterList(listId, countId, noMsgId) {-->
+<!--            const list = document.getElementById(listId);-->
+<!--            if (!list) return; // Guard clause-->
+
+<!--            const items = list.querySelectorAll('.item-card');-->
+<!--            let visibleCount = 0;-->
+
+<!--            items.forEach(item => {-->
+<!--                const itemCategory = item.dataset.categoryId;-->
+<!--                const itemRack = item.dataset.rack;-->
+<!--                const itemExpiry = item.dataset.expiryDate;-->
+
+<!--                const categoryMatch = (selectedCategory === 'all' || selectedCategory === itemCategory);-->
+<!--                const rackMatch = (selectedRack === 'all' || selectedRack === itemRack);-->
+<!--                const dateMatch = (selectedDate === '' || selectedDate === itemExpiry);-->
+
+<!--                if (categoryMatch && rackMatch && dateMatch) {-->
+<!--                    item.classList.remove('hidden');-->
+<!--                    visibleCount++;-->
+<!--                } else {-->
+<!--                    item.classList.add('hidden');-->
+<!--                }-->
+<!--            });-->
+
+<!--            const countEl = document.getElementById(countId);-->
+<!--            if (countEl) countEl.textContent = visibleCount;-->
+
+<!--            const noMsg = document.getElementById(noMsgId);-->
+<!--            if (noMsg) {-->
+<!--                noMsg.classList.toggle('hidden', visibleCount > 0);-->
+<!--            }-->
+<!--        }-->
+
+<!--        filterList('expired-list', 'expired-count', 'no-expired-msg');-->
+<!--        filterList('today-list', 'today-count', 'no-today-msg');-->
+<!--        filterList('soon-list', 'soon-count', 'no-soon-msg');-->
+<!--    }-->
+
+<!--    // Add event listeners for filters-->
+<!--    filterCategory.addEventListener('change', applyFilters);-->
+<!--    filterRack.addEventListener('change', applyFilters);-->
+<!--    filterDate.addEventListener('change', applyFilters);-->
+
+<!--    clearFiltersBtn.addEventListener('click', () => {-->
+<!--        filterCategory.value = 'all';-->
+<!--        filterRack.value = 'all';-->
+<!--        filterDate.value = ''; // Clear date input-->
+<!--        applyFilters();-->
+<!--    });-->
+
+<!--    // Close modals on outside click-->
+<!--    window.onclick = function(event) {-->
+<!--        if (event.target == sellModal) {-->
+<!--            closeSellModal();-->
+<!--        }-->
+<!--        if (event.target == wastageModal) {-->
+<!--            closeWastageModal();-->
+<!--        }-->
+<!--    }-->
+<!--</script>-->
+<!--{% endblock %}-->
+
 {% extends "inventory/base.html" %}
-{% load static %} {% block title %}Alert Monitor{% endblock %}
+{% load static %}
+
+{% block title %}Alert Monitor{% endblock %}
 {% block header %}Urgent Items - {{ supermarket.name }}{% endblock %}
 
 {% block content %}
-<div class="mb-6">
-    {% include 'includes/alerts.html' %}
-</div>
-
-<div class="mb-6 p-4 bg-white rounded-lg shadow-sm border border-gray-200">
+<!-- ================= FILTERS ================= -->
+<div class="mb-6 p-4 bg-white rounded-lg shadow-sm border">
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
-            <label for="filter-category" class="block text-sm font-medium text-gray-700">Filter by Category</label>
-            <select id="filter-category" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                <option value="all">All Categories</option>
-                {% for category in available_categories %}
-                <option value="{{ category.id }}">{{ category.name }}</option>
+            <label class="block text-sm font-medium">Category</label>
+            <select id="filter-category" class="w-full p-2 border rounded">
+                <option value="all">All</option>
+                {% for c in available_categories %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
                 {% endfor %}
             </select>
         </div>
+
         <div>
-            <label for="filter-rack" class="block text-sm font-medium text-gray-700">Filter by Rack</label>
-            <select id="filter-rack" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                <option value="all">All Racks</option>
-                {% for rack in available_racks %}
-                <option value="{{ rack.id }}">{{ rack.name }}</option>
+            <label class="block text-sm font-medium">Rack</label>
+            <select id="filter-rack" class="w-full p-2 border rounded">
+                <option value="all">All</option>
+                {% for r in available_racks %}
+                <option value="{{ r.id }}">{{ r.name }}</option>
                 {% endfor %}
             </select>
         </div>
+
         <div>
-            <label for="filter-date" class="block text-sm font-medium text-gray-700">Filter by Expiry Date</label>
-            <input type="date" id="filter-date" class="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm">
+            <label class="block text-sm font-medium">Expiry</label>
+            <input type="date" id="filter-date" class="w-full p-2 border rounded">
         </div>
-        <div class="md:mt-6">
-            <button id="clear-filters-btn" type="button" class="w-full md:w-auto px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
-                Clear Filters
+
+        <div class="flex items-end">
+            <button id="clear-filters-btn" class="px-4 py-2 bg-gray-600 text-white rounded">
+                Clear
             </button>
         </div>
     </div>
 </div>
+
+<!-- ================= EXPIRED ITEMS ================= -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<div class="bg-red-50 p-4 rounded shadow">
+<h2 class="font-bold mb-2">Expired (<span id="expired-count">{{ expired_items|length }}</span>)</h2>
 
-    <div class="bg-red-50 rounded-lg p-4 shadow-sm">
-        <h2 class="font-bold text-lg text-red-800 mb-4 flex items-center">
-            <i class="fas fa-times-circle mr-2"></i>
-            Expired (<span id="expired-count">{{ expired_items|length }}</span>)
-        </h2>
-        <div id="expired-list" class="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-            {% for item in expired_items %}
-            <div class="bg-white rounded-lg shadow-md overflow-hidden item-card"
-                 data-category-id="{{ item.get_category.id|default:'' }}"
-                 data-rack="{{ item.rack.id|default:'' }}"  data-expiry-date="{{ item.expiry_date|date:'Y-m-d' }}">
-                <div class="p-4">
-                    <div class="flex gap-4">
-                        <img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">
-                        <div class="flex-grow">
-                            <p class="font-bold text-gray-800">{{ item.product.name }}</p>
-                            <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>
-                            <p class="text-sm font-semibold text-red-600 mt-1">
-                                Expired {{ item.days_since_expiry }} day{{ item.days_since_expiry|pluralize }} ago
-                            </p>
-                            <p class="text-sm text-gray-500">Qty: {{ item.quantity }} | Rack: {{ item.rack.name|default:'N/A' }}</p>
-                        </div>
-                    </div>
-                    <div class="mt-4 pt-4 border-t flex justify-end gap-2">
-                         <button type="button"
-                                 onclick="openWastageModal({{ item.id }})"
-                                 class="text-xs font-semibold bg-gray-200 text-gray-700 px-3 py-1 rounded-full hover:bg-gray-300">
-                            Remove (Wastage)
-                         </button>
+<div id="expired-list">
+{% for item in expired_items %}
+<div class="item-card bg-white p-4 mb-3 rounded"
+     data-category-id="{{ item.get_category.id }}"
+     data-rack="{{ item.rack.id }}"
+     data-expiry-date="{{ item.expiry_date|date:'Y-m-d' }}">
 
+<p class="font-bold">{{ item.product.name }}</p>
+<p class="text-sm">Qty: {{ item.quantity }}</p>
 
-                <button type="button"
-                        onclick="openSellModal({{ item.id }})"
-                        class="text-xs font-semibold bg-blue-600 text-white px-3 py-1 rounded-full hover:bg-blue-700">
-                    Sell / Manage
-                </button>
+<div class="mt-2 flex gap-2">
+<button onclick="openWastageModal({{ item.id }})"
+        class="px-3 py-1 bg-gray-300 rounded">Wastage</button>
 
-                    </div>
-                </div>
-            </div>
-            {% empty %}
-            <div id="no-expired-msg" class="text-center p-4 text-sm text-gray-500">
-                No expired items.
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-    <div class="bg-orange-50 rounded-lg p-4 shadow-sm">
-        <h2 class="font-bold text-lg text-orange-800 mb-4 flex items-center">
-            <i class="fas fa-exclamation-circle mr-2"></i>
-            Expires Today (<span id="today-count">{{ expires_today_items|length }}</span>)
-        </h2>
-        <div id="today-list" class="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-            {% for item in expires_today_items %}
-                {% include "pricing/partials/_urgent_item_card.html" with item=item %}
-            {% empty %}
-                 <div id="no-today-msg" class="text-center p-4 text-sm text-gray-500">No items expiring today.</div>
-            {% endfor %}
-        </div>
-    </div>
-    <div class="bg-yellow-50 rounded-lg p-4 shadow-sm">
-        <h2 class="font-bold text-lg text-yellow-800 mb-4 flex items-center">
-            <i class="fas fa-info-circle mr-2"></i>
-            Expires Soon (2-7 Days) (<span id="soon-count">{{ expires_soon_items|length }}</span>)
-        </h2>
-        <div id="soon-list" class="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-            {% for item in expires_soon_items %}
-                {% include "pricing/partials/_urgent_item_card.html" with item=item %}
-            {% empty %}
-                 <div id="no-soon-msg" class="text-center p-4 text-sm text-gray-500">No items expiring soon.</div>
-            {% endfor %}
-        </div>
-    </div>
-    </div>
-
-{% if total_urgent_count == 0 %}
-<div class="bg-white p-8 rounded-lg shadow-lg text-center mt-6">
-    <div class="text-green-500 mb-4">
-        <i class="fas fa-check-circle fa-3x"></i>
-    </div>
-    <h3 class="text-xl font-bold text-gray-800">No Urgent Items</h3>
-    <p class="text-gray-600 mt-2">Your inventory is in great shape! There are no items that are expired or expiring within the next 7 days.</p>
+<button onclick="openSellModal({{ item.id }})"
+        class="px-3 py-1 bg-blue-600 text-white rounded">Sell</button>
 </div>
-{% endif %}
-
-
-<div id="sell-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
-        <form id="sell-form" method="POST">
-            {% csrf_token %}
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-2xl font-bold text-gray-900" id="sell-modal-title">Sell / Manage Item</h3>
-                <button type="button" onclick="closeSellModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
-
-            <div class="space-y-4">
-                <p>You have <strong id="modal-item-quantity" class="text-blue-600"></strong> units of <strong id="modal-item-name" class="text-blue-600"></strong>.</p>
-
-                <div>
-                    <label for="modal-quantity-sold" class="block text-sm font-medium text-gray-700">Quantity to Sell</label>
-                    <input type="number" name="quantity_sold" id="modal-quantity-sold" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700">Original Price (€)</label>
-                        <input type="text" id="modal-original-price" disabled class="mt-1 w-full p-2 border border-gray-300 rounded-md bg-gray-100">
-                    </div>
-                    <div>
-                        <label for="modal-final-price" class="block text-sm font-medium text-gray-700">Final Price (€)</label>
-                        <input type="number" step="0.01" name="final_price" id="modal-final-price" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                    </div>
-                </div>
-
-                <div>
-                    <label for="modal-discount-select" class="block text-sm font-medium text-gray-700">Apply Discount (Optional)</label>
-                    <select id="modal-discount-select" class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                        <option value="">No Discount (Manual Price)</option>
-                        {% if active_rules %}
-                        <optgroup label="Pricing Rules">
-                            {% for rule in active_rules %}
-                                <option value="rule-{{ rule.id }}">{{ rule.name }} ({{ rule.amount }}%)</option>
-                            {% endfor %}
-                        </optgroup>
-                        {% endif %}
-                        {% if active_promotions %}
-                        <optgroup label="Promotions">
-                            {% for promo in active_promotions %}
-                                <option value="promotion-{{ promo.id }}">{{ promo.name }}</option>
-                            {% endfor %}
-                        </optgroup>
-                        {% endif %}
-                    </select>
-                </div>
-
-                <input type="hidden" name="discount_type" id="modal-discount-type">
-                <input type="hidden" name="discount_id" id="modal-discount-id">
-            </div>
-
-            <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeSellModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Log Sale & Update Stock</button>
-            </div>
-        </form>
-    </div>
 </div>
-<div id="wastage-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-10 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
-        <form id="wastage-form" method="POST">
-            {% csrf_token %}
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-2xl font-bold text-gray-900">Remove Wastage</h3>
-                <button type="button" onclick="closeWastageModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
-            </div>
+{% empty %}
+<p id="no-expired-msg">No expired items</p>
+{% endfor %}
+</div>
+</div>
+</div>
 
-            <div class="space-y-4">
-                <p>You have <strong id="wastage-modal-quantity" class="text-red-600"></strong> units of <strong id="wastage-modal-name" class="text-red-600"></strong>.</p>
+<!-- ================= SELL MODAL ================= -->
+<div id="sell-modal" class="fixed inset-0 hidden bg-black/50 z-50">
+<div class="bg-white max-w-lg mx-auto mt-20 p-5 rounded">
 
-                <div>
-                    <label for="modal-quantity-wasted" class="block text-sm font-medium text-gray-700">Quantity to Remove</label>
-                    <input type="number" name="quantity_wasted" id="modal-quantity-wasted" value="1" min="1" required class="mt-1 w-full p-2 border border-gray-300 rounded-md">
-                </div>
-            </div>
+<form id="sell-form" method="POST">
+{% csrf_token %}
+<h3 class="text-xl font-bold mb-3">Sell Item</h3>
 
-            <div class="mt-6 flex justify-end gap-3">
-                <button type="button" onclick="closeWastageModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Cancel</button>
-                <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Log Wastage & Update Stock</button>
-            </div>
-        </form>
-    </div>
+<p><strong id="modal-item-name"></strong> — Qty: <strong id="modal-item-quantity"></strong></p>
+
+<input type="number" id="modal-quantity-sold" name="quantity_sold"
+       class="w-full border p-2 mt-2" min="1">
+
+<input type="text" id="modal-original-price" disabled class="w-full border p-2 mt-2">
+<input type="number" id="modal-final-price" name="final_price"
+       step="0.01" class="w-full border p-2 mt-2">
+
+<select id="modal-discount-select" class="w-full border p-2 mt-2">
+<option value="">No Discount</option>
+{% for rule in active_rules %}
+<option value="rule-{{ rule.id }}">{{ rule.name }}</option>
+{% endfor %}
+{% for promo in active_promotions %}
+<option value="promotion-{{ promo.id }}">{{ promo.name }}</option>
+{% endfor %}
+</select>
+
+<input type="hidden" id="modal-discount-type" name="discount_type">
+<input type="hidden" id="modal-discount-id" name="discount_id">
+
+<div class="mt-4 flex justify-end gap-2">
+<button type="button" onclick="closeSellModal()">Cancel</button>
+<button type="submit" class="bg-green-600 text-white px-4 py-2 rounded">Save</button>
+</div>
+</form>
+</div>
+</div>
+
+<!-- ================= WASTAGE MODAL ================= -->
+<div id="wastage-modal" class="fixed inset-0 hidden bg-black/50 z-50">
+<div class="bg-white max-w-lg mx-auto mt-20 p-5 rounded">
+
+<form id="wastage-form" method="POST">
+{% csrf_token %}
+<h3 class="text-xl font-bold mb-3">Wastage</h3>
+
+<p><strong id="wastage-modal-name"></strong> — Qty: <strong id="wastage-modal-quantity"></strong></p>
+
+<input type="number" id="modal-quantity-wasted" name="quantity_wasted"
+       class="w-full border p-2 mt-2" min="1">
+
+<div class="mt-4 flex justify-end gap-2">
+<button type="button" onclick="closeWastageModal()">Cancel</button>
+<button type="submit" class="bg-red-600 text-white px-4 py-2 rounded">Save</button>
+</div>
+</form>
+</div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // --- Global Data & Elements ---
-    const supermarketId = {{ supermarket.id }};
-    const csrfToken = '{{ csrf_token }}';
+document.addEventListener("DOMContentLoaded", () => {
 
-    // Modals
-    const sellModal = document.getElementById('sell-modal');
-    const sellForm = document.getElementById('sell-form');
-    const discountSelect = document.getElementById('modal-discount-select');
-    const discountTypeInput = document.getElementById('modal-discount-type');
-    const discountIdInput = document.getElementById('modal-discount-id');
+const supermarketId = {{ supermarket.id }};
+const sellModal = document.getElementById("sell-modal");
+const wastageModal = document.getElementById("wastage-modal");
 
-    const wastageModal = document.getElementById('wastage-modal');
-    const wastageForm = document.getElementById('wastage-form');
+const allItems = {
+{% for item in expired_items %}
+"{{ item.id }}": {
+id: {{ item.id }},
+name: "{{ item.product.name|escapejs }}",
+quantity: {{ item.quantity }},
+store_price: "{{ item.store_price|stringformat:'0.2f' }}",
+suggested_price: "{{ item.suggested_price|stringformat:'0.2f' }}",
+promotion_id: "{{ item.promotion.id|default:'' }}"
+},
+{% endfor %}
+};
 
-    // Client-side Filter Elements
-    const filterCategory = document.getElementById('filter-category');
-    const filterRack = document.getElementById('filter-rack');
-    const filterDate = document.getElementById('filter-date');
-    const clearFiltersBtn = document.getElementById('clear-filters-btn');
+let currentItem = null;
 
-    // --- allItems Object (FIXED) ---
-    // Stores data for modals. Loops over all items passed from the view.
-    const allItems = {
-        {% for item in expired_items %}
-            "{{ item.id }}": {
-                id: {{ item.id }},
-                name: "{{ item.product.name|escapejs }}",
-                quantity: {{ item.quantity }},
-                store_price: "{{ item.store_price|stringformat:'.2f'|default:'0.00' }}",
-                suggested_price: "{{ item.suggested_price|stringformat:'.2f'|default:item.store_price|stringformat:'.2f'|default:'0.00' }}",
-                applied_rule_id: "{{ item.applied_rule.id|default:'' }}",
-                promotion_id: "{{ item.promotion.id|default:'' }}",
-                category_id: "{{ item.get_category.id|default:'' }}",
-                rack: "{{ item.rack.id|default:'' }}" // Fixed: Use rack.id
-            },
-        {% endfor %}
-        {% for item in expires_today_items %}
-            "{{ item.id }}": {
-                id: {{ item.id }},
-                name: "{{ item.product.name|escapejs }}",
-                quantity: {{ item.quantity }},
-                store_price: "{{ item.store_price|stringformat:'.2f'|default:'0.00' }}",
-                suggested_price: "{{ item.suggested_price|stringformat:'.2f'|default:item.store_price|stringformat:'.2f'|default:'0.00' }}",
-                applied_rule_id: "{{ item.applied_rule.id|default:'' }}",
-                promotion_id: "{{ item.promotion.id|default:'' }}",
-                category_id: "{{ item.get_category.id|default:'' }}",
-                rack: "{{ item.rack.id|default:'' }}" // Fixed: Use rack.id
-            },
-        {% endfor %}
-        {% for item in expires_soon_items %}
-            "{{ item.id }}": {
-                id: {{ item.id }},
-                name: "{{ item.product.name|escapejs }}",
-                quantity: {{ item.quantity }},
-                store_price: "{{ item.store_price|stringformat:'.2f'|default:'0.00' }}",
-                suggested_price: "{{ item.suggested_price|stringformat:'.2f'|default:item.store_price|stringformat:'.2f'|default:'0.00' }}",
-                applied_rule_id: "{{ item.applied_rule.id|default:'' }}",
-                promotion_id: "{{ item.promotion.id|default:'' }}",
-                category_id: "{{ item.get_category.id|default:'' }}",
-                rack: "{{ item.rack.id|default:'' }}" // Fixed: Use rack.id
-            },
-        {% endfor %}
-    };
+window.openSellModal = (id) => {
+currentItem = allItems[id];
+if (!currentItem) return;
 
-    // --- allDiscounts Object ---
-    // Stores discount data from the view context for dynamic price calculation
-    let allDiscounts = {
-        rules: [
-            {% for rule in active_rules %}
-            { id: {{ rule.id }}, name: "{{ rule.name|escapejs }}", amount: {{ rule.amount }}, details: "{{ rule.amount }}%", discount_type: "PERCENTAGE" },
-            {% endfor %}
-        ],
-        promotions: [
-            {% for promo in active_promotions %}
-            // Assuming Promotion model has 'discount_value' and 'discount_type'
-            { id: {{ promo.id }}, name: "{{ promo.name|escapejs }}", amount: {{ promo.discount_value }}, details: "{{ promo.get_discount_display }}", discount_type: "{{ promo.discount_type }}" },
-            {% endfor %}
-        ]
-    };
-    let currentItem = null; // Stores the item being edited in a modal
+document.getElementById("modal-item-name").textContent = currentItem.name;
+document.getElementById("modal-item-quantity").textContent = currentItem.quantity;
+document.getElementById("modal-original-price").value = currentItem.store_price;
+document.getElementById("modal-final-price").value = currentItem.suggested_price;
 
+sellModal.classList.remove("hidden");
+};
 
-    // --- Sell Modal Controls ---
-    window.openSellModal = function(itemId) {
-        currentItem = allItems[itemId];
-        if (!currentItem) return;
+window.closeSellModal = () => sellModal.classList.add("hidden");
 
-        // Set form action URL
-        sellForm.action = `/pricing/${supermarketId}/item/${currentItem.id}/sell/`;
+window.openWastageModal = (id) => {
+currentItem = allItems[id];
+document.getElementById("wastage-modal-name").textContent = currentItem.name;
+document.getElementById("wastage-modal-quantity").textContent = currentItem.quantity;
+wastageModal.classList.remove("hidden");
+};
 
-        document.getElementById('modal-item-name').textContent = currentItem.name;
-        document.getElementById('modal-item-quantity').textContent = currentItem.quantity;
+window.closeWastageModal = () => wastageModal.classList.add("hidden");
 
-        const quantityInput = document.getElementById('modal-quantity-sold');
-        quantityInput.value = 1; // Default to 1
-        quantityInput.max = currentItem.quantity;
-
-        document.getElementById('modal-original-price').value = currentItem.store_price;
-        document.getElementById('modal-final-price').value = currentItem.suggested_price;
-
-        // Pre-select the discount if one was applied
-        if (currentItem.applied_rule_id) {
-            discountSelect.value = `rule-${currentItem.applied_rule_id}`;
-        } else if (currentItem.promotion_id) {
-            discountSelect.value = `promo-${currentItem.promotion_id}`;
-        } else {
-            discountSelect.value = "";
-        }
-
-        // Trigger change event to set hidden fields and calculate price
-        discountSelect.dispatchEvent(new Event('change'));
-
-        sellModal.classList.remove('hidden');
-    }
-
-    window.closeSellModal = function() {
-        sellModal.classList.add('hidden');
-        sellForm.reset();
-        discountTypeInput.value = '';
-        discountIdInput.value = '';
-        currentItem = null;
-    }
-
-    // --- Wastage Modal Controls ---
-    window.openWastageModal = function(itemId) {
-        currentItem = allItems[itemId];
-        if (!currentItem) return;
-
-        // Set form action URL
-        wastageForm.action = `/pricing/${supermarketId}/item/${currentItem.id}/wastage/`;
-
-        document.getElementById('wastage-modal-name').textContent = currentItem.name;
-        document.getElementById('wastage-modal-quantity').textContent = currentItem.quantity;
-
-        const quantityInput = document.getElementById('modal-quantity-wasted');
-        quantityInput.value = currentItem.quantity; // Default to full quantity
-        quantityInput.max = currentItem.quantity;
-
-        wastageModal.classList.remove('hidden');
-    }
-
-    window.closeWastageModal = function() {
-        wastageModal.classList.add('hidden');
-        wastageForm.reset();
-        currentItem = null;
-    }
-
-
-    // --- Dynamic Price Calculation (for Sell Modal) ---
-    discountSelect.addEventListener('change', function() {
-        // Set hidden fields
-        const selectedValue = this.value;
-        if (selectedValue) {
-            const [type, id] = selectedValue.split('-');
-            discountTypeInput.value = type;
-            discountIdInput.value = id;
-        } else {
-            discountTypeInput.value = '';
-            discountIdInput.value = '';
-        }
-
-        // Calculate price
-        if (!currentItem || !currentItem.store_price) return;
-
-        const finalPriceInput = document.getElementById('modal-final-price');
-        const originalPrice = parseFloat(document.getElementById('modal-original-price').value);
-
-        if (selectedValue === "") {
-            finalPriceInput.value = currentItem.suggested_price;
-            return;
-        }
-
-        const [type, id] = selectedValue.split('-');
-        let discountData = null;
-
-        if (type === 'rule') {
-            discountData = allDiscounts.rules.find(r => r.id == id);
-        } else {
-            discountData = allDiscounts.promotions.find(p => p.id == id);
-        }
-
-        if (!discountData) return;
-
-        let newPrice;
-        if (discountData.discount_type === 'PERCENTAGE') {
-            const discountMultiplier = (100 - parseFloat(discountData.amount)) / 100;
-            newPrice = (originalPrice * discountMultiplier);
-        } else { // Fixed Amount
-            newPrice = (originalPrice - parseFloat(discountData.amount));
-        }
-
-        newPrice = Math.round(newPrice * 100) / 100; // Round to 2 decimal places
-        finalPriceInput.value = newPrice < 0 ? 0.00 : newPrice.toFixed(2);
-    });
-
-    // --- Client-Side Filter Logic ---
-    function applyFilters() {
-        const selectedCategory = filterCategory.value;
-        const selectedRack = filterRack.value;
-        const selectedDate = filterDate.value;
-
-        function filterList(listId, countId, noMsgId) {
-            const list = document.getElementById(listId);
-            if (!list) return; // Guard clause
-
-            const items = list.querySelectorAll('.item-card');
-            let visibleCount = 0;
-
-            items.forEach(item => {
-                const itemCategory = item.dataset.categoryId;
-                const itemRack = item.dataset.rack;
-                const itemExpiry = item.dataset.expiryDate;
-
-                const categoryMatch = (selectedCategory === 'all' || selectedCategory === itemCategory);
-                const rackMatch = (selectedRack === 'all' || selectedRack === itemRack);
-                const dateMatch = (selectedDate === '' || selectedDate === itemExpiry);
-
-                if (categoryMatch && rackMatch && dateMatch) {
-                    item.classList.remove('hidden');
-                    visibleCount++;
-                } else {
-                    item.classList.add('hidden');
-                }
-            });
-
-            const countEl = document.getElementById(countId);
-            if (countEl) countEl.textContent = visibleCount;
-
-            const noMsg = document.getElementById(noMsgId);
-            if (noMsg) {
-                noMsg.classList.toggle('hidden', visibleCount > 0);
-            }
-        }
-
-        filterList('expired-list', 'expired-count', 'no-expired-msg');
-        filterList('today-list', 'today-count', 'no-today-msg');
-        filterList('soon-list', 'soon-count', 'no-soon-msg');
-    }
-
-    // Add event listeners for filters
-    filterCategory.addEventListener('change', applyFilters);
-    filterRack.addEventListener('change', applyFilters);
-    filterDate.addEventListener('change', applyFilters);
-
-    clearFiltersBtn.addEventListener('click', () => {
-        filterCategory.value = 'all';
-        filterRack.value = 'all';
-        filterDate.value = ''; // Clear date input
-        applyFilters();
-    });
-
-    // Close modals on outside click
-    window.onclick = function(event) {
-        if (event.target == sellModal) {
-            closeSellModal();
-        }
-        if (event.target == wastageModal) {
-            closeWastageModal();
-        }
-    }
+});
 </script>
 {% endblock %}
