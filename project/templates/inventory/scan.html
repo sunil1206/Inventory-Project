@@ -30,31 +30,23 @@
             </nav>
         </div>
 
-        <form id="barcode-form">
-    {% csrf_token %}
+        <form id="barcode-form" action="{% url 'inventory:scan_redirect' supermarket.id %}" method="POST">
+            {% csrf_token %}
 
-    <div id="pane-manual">
-        <label class="block text-sm font-medium text-gray-700">Barcode</label>
-        <input type="text" id="manual-barcode"
-               class="mt-1 block w-full p-3 border rounded-md focus:ring-blue-500 focus:border-blue-500"
-               placeholder="Type barcode here...">
+            <div id="pane-manual">
+                <label for="manual-barcode" class="block text-sm font-medium text-gray-700">Barcode</label>
+                <input type="text" name="barcode" id="manual-barcode" class="mt-1 block w-full p-3 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Type barcode here...">
+                <button type="submit" class="mt-4 w-full bg-blue-600 text-white font-semibold py-3 rounded-lg hover:bg-blue-700">
+                    Find Product
+                </button>
+            </div>
 
-        <!-- ✅ ID ADDED -->
-        <button id="manual-submit" type="button"
-                class="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
-            Find Product
-        </button>
-    </div>
-
-    <div id="pane-scan" class="hidden">
-        <div id="reader" class="w-full h-80 bg-gray-900 rounded-lg overflow-hidden"></div>
-        <p id="scanner-status"
-           class="mt-2 text-center text-gray-500 text-sm">
-           Initializing camera...
-        </p>
-    </div>
-</form>
-
+            <div id="pane-scan" class="hidden">
+                <div id="reader" class="w-full h-80 bg-gray-900 rounded-lg overflow-hidden"></div>
+                <p id="scanner-status" class="mt-2 text-center text-gray-500 text-sm">Initializing camera...</p>
+                <input type="hidden" name="barcode" id="scanned-barcode">
+            </div>
+        </form>
     </div>
 </div>
 {% endblock %}
@@ -62,106 +54,80 @@
 {% block extra_js %}
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-
-    const tabScan = document.getElementById("tab-scan");
-    const tabManual = document.getElementById("tab-manual");
-    const paneScan = document.getElementById("pane-scan");
-    const paneManual = document.getElementById("pane-manual");
-    const manualInput = document.getElementById("manual-barcode");
-    const manualBtn = document.getElementById("manual-submit");
-    const status = document.getElementById("scanner-status");
-
+document.addEventListener('DOMContentLoaded', function() {
+    const tabScan = document.getElementById('tab-scan');
+    const tabManual = document.getElementById('tab-manual');
+    const paneScan = document.getElementById('pane-scan');
+    const paneManual = document.getElementById('pane-manual');
+    const barcodeForm = document.getElementById('barcode-form');
+    const manualBarcode = document.getElementById('manual-barcode');
+    const scannedBarcode = document.getElementById('scanned-barcode');
+    const scannerStatus = document.getElementById('scanner-status');
     let html5QrCode;
-    let scanLocked = false;   // ✅ prevents double scan
 
-    function activate(tab) {
-        if (tab === "scan") {
-            paneScan.classList.remove("hidden");
-            paneManual.classList.add("hidden");
+    function activateTab(tab) {
+        if (tab === 'scan') {
+            // Activate Scan Tab
+            tabScan.classList.add('border-blue-500', 'text-blue-600');
+            tabScan.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            paneScan.classList.remove('hidden');
+            // Deactivate Manual Tab
+            tabManual.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            tabManual.classList.remove('border-blue-500', 'text-blue-600');
+            paneManual.classList.add('hidden');
+            // Enable/disable form fields
+            manualBarcode.disabled = true;
+            scannedBarcode.disabled = false;
             startScanner();
         } else {
-            paneManual.classList.remove("hidden");
-            paneScan.classList.add("hidden");
+            // Activate Manual Tab
+            tabManual.classList.add('border-blue-500', 'text-blue-600');
+            tabManual.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            paneManual.classList.remove('hidden');
+            // Deactivate Scan Tab
+            tabScan.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            tabScan.classList.remove('border-blue-500', 'text-blue-600');
+            paneScan.classList.add('hidden');
+            // Enable/disable form fields
+            manualBarcode.disabled = false;
+            scannedBarcode.disabled = true;
             stopScanner();
         }
     }
 
-    tabScan.onclick = () => activate("scan");
-    tabManual.onclick = () => activate("manual");
+    tabScan.addEventListener('click', () => activateTab('scan'));
+    tabManual.addEventListener('click', () => activateTab('manual'));
 
-    // ✅ FIXED API CALL
-    function lookupBarcode(barcode) {
-        fetch("{% url 'inventory:scan_api' %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": "{{ csrf_token }}",
-                "Authorization": "Bearer {{ request.user.auth_token.key }}"
-            },
-            body: JSON.stringify({
-                mode: "lookup",
-                barcode: barcode,
-                supermarket_id: "{{ supermarket.id }}"
-            })
-        })
-        .then(res => {
-            if (!res.ok) throw new Error("API failed");
-            return res.json();
-        })
-        .then(data => {
-            if (data.product) {
-                window.location.href =
-                    `/inventory/add/{{ supermarket.id }}/?barcode=${data.product.barcode}`;
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("Scan failed");
-            scanLocked = false;
-        });
-    }
-
-    // MANUAL
-    manualBtn.onclick = () => {
-        if (!manualInput.value) return;
-        lookupBarcode(manualInput.value);
-    };
-
-    // SCAN
-    function onScanSuccess(text) {
-        if (scanLocked) return;
-        scanLocked = true;
-
-        status.innerHTML = `<b class="text-green-600">Found: ${text}</b>`;
+    // --- Scanner Logic ---
+    function onScanSuccess(decodedText, decodedResult) {
+        scannerStatus.innerHTML = `<p class="text-green-600 font-bold">✅ Success! Found: ${decodedText}</p>`;
         stopScanner();
-        lookupBarcode(text);
+        // Fill the hidden form field and submit
+        scannedBarcode.value = decodedText;
+        barcodeForm.submit();
     }
 
-    function startScanner() {
-        if (html5QrCode?.isScanning) return;
-
+    async function startScanner() {
+        if (html5QrCode && html5QrCode.isScanning) return;
         html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start(
-            { facingMode: "environment" },
-            { fps: 10, qrbox: 250 },
-            onScanSuccess
-        ).then(() => {
-            status.innerText = "Scanner active";
-        }).catch(err => {
-            status.innerText = "Camera error";
-            console.error(err);
-        });
-    }
-
-    function stopScanner() {
-        if (html5QrCode?.isScanning) {
-            html5QrCode.stop();
+        const config = { fps: 10, qrbox: { width: 250, height: 150 } };
+        scannerStatus.textContent = "Requesting camera access...";
+        try {
+            await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (err) => {});
+            scannerStatus.textContent = "Scanner active. Please scan a barcode.";
+        } catch (err) {
+            scannerStatus.textContent = `Camera Error: ${err}`;
         }
     }
 
-    activate("manual");
+    function stopScanner() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            html5QrCode.stop().catch(err => console.error("Failed to stop scanner", err));
+        }
+    }
+
+    // Initialize to manual tab by default
+    activateTab('manual');
 });
 </script>
-
 {% endblock %}
