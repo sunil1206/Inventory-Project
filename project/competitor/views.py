@@ -32,22 +32,12 @@ from competitor.models import CompetitorPriceSnapshot
 
 @login_required
 def competitor_compare_all(request, supermarket_id):
-    """
-    View competitor pricing for all products in a supermarket.
-    Includes:
-     - Best price logic
-     - Overpriced logic
-     - Competitive threshold
-     - Preloading of competitor snapshots
-    """
-
     supermarket = get_object_or_404(
         Supermarket,
         pk=supermarket_id,
         owner=request.user
     )
 
-    # Store price list
     products_qs = (
         ProductPrice.objects
         .filter(supermarket=supermarket)
@@ -55,35 +45,33 @@ def competitor_compare_all(request, supermarket_id):
         .order_by("product__name")
     )
 
-    # Preload ALL snapshots once
+    product_ids = products_qs.values_list("product__barcode", flat=True)
+
     snapshots = (
         CompetitorPriceSnapshot.objects
-        .filter(product__in=[p.product for p in products_qs])
+        .filter(product__barcode__in=product_ids)
         .select_related("competitor", "product")
-        .order_by("-scraped_at")
+        .order_by("competitor_id", "-scraped_at")
     )
 
-    # Group snapshots by product
+    # Explicitly keep LATEST snapshot per competitor per product
     snaps_by_product = {}
     for s in snapshots:
-        snaps_by_product.setdefault(s.product.barcode, []).append(s)
+        snaps_by_product.setdefault(s.product.barcode, {})
+        snaps_by_product[s.product.barcode].setdefault(
+            s.competitor_id, s
+        )
 
     analysis = []
 
     for price_row in products_qs:
         product = price_row.product
-        snaps = snaps_by_product.get(product.barcode, [])
-
-        latest_per_competitor = {}
-
-        # keep FIRST snapshot per competitor_id
-        for s in snaps:
-            latest_per_competitor[s.competitor_id] = s
+        competitor_snaps = snaps_by_product.get(product.barcode, {}).values()
 
         competitor_prices = []
         competitor_details = []
 
-        for s in latest_per_competitor.values():
+        for s in competitor_snaps:
             competitor_prices.append(s.price)
             competitor_details.append({
                 "name": s.competitor.name,
@@ -92,7 +80,6 @@ def competitor_compare_all(request, supermarket_id):
                 "time": s.scraped_at,
             })
 
-        # Stats
         min_price = min(competitor_prices) if competitor_prices else None
         avg_price = (
             sum(competitor_prices) / len(competitor_prices)
@@ -108,7 +95,7 @@ def competitor_compare_all(request, supermarket_id):
 
             if store_price <= min_price:
                 status = "Best Price"
-            elif store_price <= avg_price:
+            elif avg_price and store_price <= avg_price:
                 status = "Competitive"
             else:
                 status = "Overpriced"
