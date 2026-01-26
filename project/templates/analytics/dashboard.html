@@ -116,19 +116,7 @@
         <a href="{% url 'analytics:competitor_detail' supermarket.id %}"
            class="text-xs text-green-600 hover:underline">View all</a>
     </div>
-    <div class="divide-y text-sm max-h-64 overflow-y-auto">
-        {% for row in competitor_records %}
-            <div class="py-2 flex justify-between items-center">
-                <div class="flex-1 pr-3 truncate">
-                    <p class="font-medium truncate">{{ row.product.name }}</p>
-                    <p class="text-xs text-gray-500 truncate">{{ row.competitor.name }}</p>
-                </div>
-                <span class="font-semibold text-green-600">€{{ row.price }}</span>
-            </div>
-        {% empty %}
-            <p class="py-4 text-center text-gray-500">No competitor data.</p>
-        {% endfor %}
-    </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
