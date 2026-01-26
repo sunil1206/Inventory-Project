@@ -54,7 +54,11 @@
                     <div class="flex gap-4">
                         <img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}" class="w-20 h-20 object-contain rounded-md border flex-shrink-0">
                         <div class="flex-grow">
-                            <p class="font-bold text-gray-800">{{ item.product.name }}</p>
+<!--                            <p class="font-bold text-gray-800">{{ item.product.name }}</p>-->
+                            <a href="{% url 'inventory:edit_product' supermarket.id item.product.barcode %}">
+    <p class="font-bold text-gray-800">{{ item.product.name }}</p>
+</a>
+
                             <p class="text-xs text-gray-500">{{ item.product.barcode }}</p>
                             <p class="text-sm font-semibold text-red-600 mt-1">
                                 Expired {{ item.days_since_expiry }} day{{ item.days_since_expiry|pluralize }} ago
@@ -212,6 +216,7 @@
 </div>
 {% endblock %}
 {% block extra_js %}
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -232,6 +237,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const filterRack = document.getElementById('filter-rack');
     const filterDate = document.getElementById('filter-date');
     const clearFiltersBtn = document.getElementById('clear-filters-btn');
+
+    /* ================= RULES DATA (FOR AUTO PRICE) ================= */
+    const RULES = {
+        {% for rule in active_rules %}
+        "{{ rule.id }}": {
+            amount: parseFloat("{{ rule.amount }}")  // ✅ 30, 50, etc.
+        },
+        {% endfor %}
+    };
 
     /* ================= ITEMS DATA ================= */
     const allItems = {
@@ -296,6 +310,7 @@ document.addEventListener("DOMContentLoaded", function () {
             discountSelect.value = "";
         }
 
+        // ✅ Trigger price update automatically
         discountSelect.dispatchEvent(new Event('change'));
         sellModal.classList.remove('hidden');
     };
@@ -329,21 +344,40 @@ document.addEventListener("DOMContentLoaded", function () {
         currentItem = null;
     };
 
-    /* ================= DISCOUNT LOGIC ================= */
+    /* ================= DISCOUNT LOGIC ✅ AUTO FINAL PRICE ================= */
     discountSelect.addEventListener('change', function () {
         if (!currentItem) return;
 
         const val = this.value;
+
+        // ✅ Always parse original price
+        const originalPrice = parseFloat(currentItem.store_price);
+        const suggestedPrice = parseFloat(currentItem.suggested_price);
+
+        // No discount selected
         if (!val) {
             discountTypeInput.value = "";
             discountIdInput.value = "";
-            document.getElementById('modal-final-price').value = currentItem.suggested_price;
+            document.getElementById('modal-final-price').value = originalPrice.toFixed(2);
             return;
         }
 
         const [type, id] = val.split('-');
         discountTypeInput.value = type;
         discountIdInput.value = id;
+
+        let finalPrice = suggestedPrice;
+
+        // ✅ Rule based discount (percentage)
+        if (type === "rule" && RULES[id]) {
+            const percent = RULES[id].amount; // 30 or 50
+            finalPrice = originalPrice * (1 - (percent / 100));
+        }
+
+        // ✅ Safety
+        if (finalPrice < 0) finalPrice = 0;
+
+        document.getElementById('modal-final-price').value = finalPrice.toFixed(2);
     });
 
     /* ================= FILTER LOGIC ================= */
@@ -379,6 +413,26 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
 });
+</script>
+
+<script>
+    const RULES = {
+    {% for rule in active_rules %}
+    "{{ rule.id }}": {
+        amount: parseFloat("{{ rule.amount }}") // % value like 30, 50
+    },
+    {% endfor %}
+};
+
+const PROMOS = {
+    {% for promo in active_promotions %}
+    "{{ promo.id }}": {
+        discount_type: "{{ promo.discount_type }}",
+        amount: parseFloat("{{ promo.discount_value|default:0 }}") // adjust if your promo field name is different
+    },
+    {% endfor %}
+};
+
 </script>
 {% endblock %}
 

@@ -1,24 +1,40 @@
 from datetime import timedelta
-from django.db.models import Sum, Count, F, Avg
+import json
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import (
+    Sum, Count, F, Avg, Q,
+    DecimalField, ExpressionWrapper
+)
 from django.shortcuts import render, get_object_or_404
 from django.utils import timezone
-from django.contrib.auth.decorators import login_required
-import json
-from django.db.models import Q
 
-# Corrected Imports based on project structure
+# Inventory models
 from Inventory.models import (
     InventoryItem,
     ProductPrice,
     Supermarket,
     Rack,
 )
-# Assuming these models exist in these apps based on your provided code
-# If they are in 'inventory', change 'pricing' or 'order' to 'inventory'
+
+# Pricing models
 from pricing.models import DiscountedSale, WastageRecord, Promotion, PricingRule
-# from Inventory import WastageRecord  # WastageRecord was previously in inventory
+
+# Competitor models
 from competitor.models import CompetitorPriceSnapshot
+
+# Order models
 from order.models import OrderBatch, OrderLine
+
+
+# ✅ Helper expression for revenue calculation
+REVENUE_EXPR = ExpressionWrapper(
+    F("final_price") * F("quantity_sold"),
+    output_field=DecimalField(max_digits=12, decimal_places=2),
+)
+
+
+@login_required
 def dashboard(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
     today = timezone.now().date()
@@ -37,38 +53,42 @@ def dashboard(request, supermarket_id):
     fresh = max(total_items - expired - expiring, 0)
 
     # ============================
-    # SALES — REVENUE
+    # SALES — REVENUE ✅ FIXED
     # ============================
     sales = DiscountedSale.objects.filter(supermarket=supermarket)
-    total_revenue = (
-        sales.aggregate(total=Sum("final_price"))["total"] or 0
-    )
 
-    # Revenue by category
-    revenue_cat_raw = (
-        sales.values("category__name")
-        .annotate(total=Sum("final_price"))
-        .order_by("-total")
-    )
-    cat_labels = []
-    cat_values = []
-    for r in revenue_cat_raw:
-        cat_labels.append(r["category__name"] or "Uncategorized")
-        cat_values.append(float(r["total"]))
+    total_revenue = sales.aggregate(total=Sum(REVENUE_EXPR))["total"] or 0
+    total_units_sold = sales.aggregate(total=Sum("quantity_sold"))["total"] or 0
 
     # ============================
-    # SALES TREND (30 days)
+    # Revenue by category ✅ FIXED
+    # ============================
+    revenue_cat_raw = (
+        sales.values("category__name")
+        .annotate(total=Sum(REVENUE_EXPR))
+        .order_by("-total")
+    )
+
+    cat_labels, cat_values = [], []
+    for r in revenue_cat_raw:
+        cat_labels.append(r["category__name"] or "Uncategorized")
+        cat_values.append(float(r["total"] or 0))
+
+    # ============================
+    # SALES TREND (30 days) ✅ FIXED
     # ============================
     trend_raw = (
         sales.filter(date_sold__date__gte=today - timedelta(days=30))
         .values("date_sold__date")
-        .annotate(total=Sum("final_price"))
+        .annotate(total=Sum(REVENUE_EXPR))
         .order_by("date_sold__date")
     )
+
     trend_labels, trend_values = [], []
     for r in trend_raw:
         trend_labels.append(r["date_sold__date"].strftime("%d %b"))
-        trend_values.append(float(r["total"]))
+        trend_values.append(float(r["total"] or 0))
+
     sales_trend = {"labels": trend_labels, "values": trend_values}
 
     # ============================
@@ -80,10 +100,10 @@ def dashboard(request, supermarket_id):
         .annotate(cartons=Sum("lines__cartons"))
         .order_by("-cartons")
     )
-    supplier_labels = []
-    supplier_values = []
+
+    supplier_labels, supplier_values = [], []
     for s in supplier_raw:
-        supplier_labels.append(s["supplier__name"])
+        supplier_labels.append(s["supplier__name"] or "Unknown Supplier")
         supplier_values.append(s["cartons"] or 0)
 
     # ============================
@@ -95,11 +115,11 @@ def dashboard(request, supermarket_id):
         .annotate(qty=Sum("quantity"))
         .order_by("-qty")
     )
-    rack_labels = []
-    rack_values = []
+
+    rack_labels, rack_values = [], []
     for r in rack_raw:
-        rack_labels.append(r["rack__name"])
-        rack_values.append(r["qty"])
+        rack_labels.append(r["rack__name"] or "No Rack")
+        rack_values.append(r["qty"] or 0)
 
     # ============================
     # COMPETITOR LOG
@@ -113,10 +133,13 @@ def dashboard(request, supermarket_id):
     # ============================
     # PRICING RULES KPI
     # ============================
-    active_rules = PricingRule.objects.filter(supermarket=supermarket, is_active=True).count()
+    active_rules = PricingRule.objects.filter(
+        supermarket=supermarket,
+        is_active=True
+    ).count()
+
     rule_impacts = sales.filter(triggering_rule__isnull=False).count()
 
-    # Rule breakdown
     rule_raw = (
         PricingRule.objects.filter(supermarket=supermarket, is_active=True)
         .values("rule_type")
@@ -128,7 +151,11 @@ def dashboard(request, supermarket_id):
     # ============================
     # PROMOTIONS KPI
     # ============================
-    active_promos = Promotion.objects.filter(supermarket=supermarket, is_active=True).count()
+    active_promos = Promotion.objects.filter(
+        supermarket=supermarket,
+        is_active=True
+    ).count()
+
     promo_hits = sales.filter(promotion__isnull=False).count()
 
     promo_raw = (
@@ -142,7 +169,6 @@ def dashboard(request, supermarket_id):
     # ============================
     # AVERAGE DISCOUNT STRENGTH
     # ============================
-    # (orig - final) / orig * 100
     discounted = (
         sales.exclude(original_price__isnull=True)
         .annotate(
@@ -177,6 +203,8 @@ def dashboard(request, supermarket_id):
         "expiring": expiring,
         "fresh": fresh,
         "total_revenue": total_revenue,
+        "total_units_sold": total_units_sold,
+
         "active_rules": active_rules,
         "active_promos": active_promos,
         "rule_impacts": rule_impacts,
@@ -206,6 +234,9 @@ def dashboard(request, supermarket_id):
     }
 
     return render(request, "analytics/dashboard.html", context)
+
+
+@login_required
 def sales_detail(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
 
@@ -214,14 +245,18 @@ def sales_detail(request, supermarket_id):
         .values("category__name")
         .annotate(
             qty=Sum("quantity_sold"),
-            revenue=Sum("final_price")
+            revenue=Sum(REVENUE_EXPR)   # ✅ FIXED
         )
         .order_by("-revenue")
     )
+
     return render(request, "analytics/sales_detail.html", {
         "supermarket": supermarket,
         "rows": rows,
     })
+
+
+@login_required
 def expiry_detail(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
     today = timezone.now().date()
@@ -236,12 +271,14 @@ def expiry_detail(request, supermarket_id):
         ).count(),
         "fresh": items.filter(expiry_date__gt=today + timedelta(days=7)).count(),
     }
+
     return render(request, "analytics/expiry_detail.html", {
         "supermarket": supermarket,
         "stats": stats,
     })
 
 
+@login_required
 def competitor_detail(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
 
@@ -257,6 +294,7 @@ def competitor_detail(request, supermarket_id):
     })
 
 
+@login_required
 def pricing_detail(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
 
@@ -272,6 +310,7 @@ def pricing_detail(request, supermarket_id):
     })
 
 
+@login_required
 def rack_heatmap(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
 
@@ -281,12 +320,14 @@ def rack_heatmap(request, supermarket_id):
         .annotate(qty=Sum("quantity"), avg_expiry=Avg("expiry_date"))
         .order_by("-qty")
     )
+
     return render(request, "analytics/rack_heatmap.html", {
         "supermarket": supermarket,
         "rows": data,
     })
 
 
+@login_required
 def supplier_performance(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
 
@@ -305,6 +346,8 @@ def supplier_performance(request, supermarket_id):
         "rows": rows,
     })
 
+
+@login_required
 def packaging_analytics(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
 

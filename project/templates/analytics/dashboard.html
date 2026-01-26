@@ -12,7 +12,7 @@
     <!-- Revenue -->
     <div class="bg-white p-5 rounded-xl shadow hover:shadow-md transition">
         <p class="text-gray-500 text-sm">Total Revenue</p>
-        <h2 class="text-3xl font-bold text-green-600 mt-1">€{{ total_revenue }}</h2>
+        <h2 class="text-3xl font-bold text-green-600 mt-1">€{{ total_revenue|floatformat:2 }}</h2>
         <p class="text-xs text-gray-400 mt-1">last 30 days</p>
     </div>
 
