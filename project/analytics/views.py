@@ -34,6 +34,17 @@ REVENUE_EXPR = ExpressionWrapper(
 )
 
 
+
+from django.db.models.functions import TruncDate
+
+
+# ✅ Revenue expression (price × quantity)
+REVENUE_EXPR = ExpressionWrapper(
+    F("final_price") * F("quantity_sold"),
+    output_field=DecimalField(max_digits=14, decimal_places=2)
+)
+
+
 @login_required
 def dashboard(request, supermarket_id):
     supermarket = get_object_or_404(Supermarket, id=supermarket_id)
@@ -53,7 +64,7 @@ def dashboard(request, supermarket_id):
     fresh = max(total_items - expired - expiring, 0)
 
     # ============================
-    # SALES — REVENUE ✅ FIXED
+    # SALES
     # ============================
     sales = DiscountedSale.objects.filter(supermarket=supermarket)
 
@@ -61,21 +72,7 @@ def dashboard(request, supermarket_id):
     total_units_sold = sales.aggregate(total=Sum("quantity_sold"))["total"] or 0
 
     # ============================
-    # Revenue by category ✅ FIXED
-    # ============================
-    revenue_cat_raw = (
-        sales.values("category__name")
-        .annotate(total=Sum(REVENUE_EXPR))
-        .order_by("-total")
-    )
-
-    cat_labels, cat_values = [], []
-    for r in revenue_cat_raw:
-        cat_labels.append(r["category__name"] or "Uncategorized")
-        cat_values.append(float(r["total"] or 0))
-
-    # ============================
-    # SALES TREND (30 days) ✅ FIXED
+    # SALES TREND (30 DAYS)
     # ============================
     trend_raw = (
         sales.filter(date_sold__date__gte=today - timedelta(days=30))
@@ -84,12 +81,71 @@ def dashboard(request, supermarket_id):
         .order_by("date_sold__date")
     )
 
-    trend_labels, trend_values = [], []
-    for r in trend_raw:
-        trend_labels.append(r["date_sold__date"].strftime("%d %b"))
-        trend_values.append(float(r["total"] or 0))
+    trend_labels = [r["date_sold__date"].strftime("%d %b") for r in trend_raw]
+    trend_values = [float(r["total"] or 0) for r in trend_raw]
 
     sales_trend = {"labels": trend_labels, "values": trend_values}
+
+    # ============================
+    # WASTAGE ANALYTICS
+    # ============================
+    wastage = WastageRecord.objects.filter(supermarket=supermarket)
+
+    total_wastage_loss = wastage.aggregate(
+        loss=Sum(F("original_store_price") * F("quantity_wasted"))
+    )["loss"] or 0
+
+    # Wastage by category
+    wastage_cat_raw = (
+        wastage.values("category__name")
+            .annotate(
+            loss=Sum(F("original_store_price") * F("quantity_wasted"))
+        )
+            .order_by("-loss")
+    )
+
+    wastage_cat_labels = [
+        w["category__name"] or "Uncategorized" for w in wastage_cat_raw
+    ]
+    wastage_cat_values = [
+        float(w["loss"] or 0) for w in wastage_cat_raw
+    ]
+
+    # ============================
+    # DISCOUNT VS FULL PRICE SALES
+    # ============================
+    discount_split = sales.aggregate(
+        discounted_units=Sum(
+            "quantity_sold",
+            filter=Q(triggering_rule__isnull=False) | Q(promotion__isnull=False)
+        ),
+        fullprice_units=Sum(
+            "quantity_sold",
+            filter=Q(triggering_rule__isnull=True) & Q(promotion__isnull=True)
+        ),
+    )
+
+    discount_split_values = [
+        discount_split["fullprice_units"] or 0,
+        discount_split["discounted_units"] or 0,
+    ]
+
+    sales_vs_wastage = [
+        float(total_revenue),
+        float(total_wastage_loss),
+    ]
+
+    # ============================
+    # REVENUE BY CATEGORY
+    # ============================
+    revenue_cat_raw = (
+        sales.values("category__name")
+        .annotate(total=Sum(REVENUE_EXPR))
+        .order_by("-total")
+    )
+
+    cat_labels = [r["category__name"] or "Uncategorized" for r in revenue_cat_raw]
+    cat_values = [float(r["total"] or 0) for r in revenue_cat_raw]
 
     # ============================
     # SUPPLIERS
@@ -101,10 +157,8 @@ def dashboard(request, supermarket_id):
         .order_by("-cartons")
     )
 
-    supplier_labels, supplier_values = [], []
-    for s in supplier_raw:
-        supplier_labels.append(s["supplier__name"] or "Unknown Supplier")
-        supplier_values.append(s["cartons"] or 0)
+    supplier_labels = [s["supplier__name"] or "Unknown" for s in supplier_raw]
+    supplier_values = [s["cartons"] or 0 for s in supplier_raw]
 
     # ============================
     # RACK LOAD
@@ -116,10 +170,8 @@ def dashboard(request, supermarket_id):
         .order_by("-qty")
     )
 
-    rack_labels, rack_values = [], []
-    for r in rack_raw:
-        rack_labels.append(r["rack__name"] or "No Rack")
-        rack_values.append(r["qty"] or 0)
+    rack_labels = [r["rack__name"] or "No Rack" for r in rack_raw]
+    rack_values = [r["qty"] or 0 for r in rack_raw]
 
     # ============================
     # COMPETITOR LOG
@@ -131,13 +183,9 @@ def dashboard(request, supermarket_id):
     )
 
     # ============================
-    # PRICING RULES KPI
+    # PRICING RULES
     # ============================
-    active_rules = PricingRule.objects.filter(
-        supermarket=supermarket,
-        is_active=True
-    ).count()
-
+    active_rules = PricingRule.objects.filter(supermarket=supermarket, is_active=True).count()
     rule_impacts = sales.filter(triggering_rule__isnull=False).count()
 
     rule_raw = (
@@ -145,17 +193,14 @@ def dashboard(request, supermarket_id):
         .values("rule_type")
         .annotate(count=Count("id"))
     )
+
     rule_labels = [r["rule_type"] for r in rule_raw]
     rule_values = [r["count"] for r in rule_raw]
 
     # ============================
-    # PROMOTIONS KPI
+    # PROMOTIONS
     # ============================
-    active_promos = Promotion.objects.filter(
-        supermarket=supermarket,
-        is_active=True
-    ).count()
-
+    active_promos = Promotion.objects.filter(supermarket=supermarket, is_active=True).count()
     promo_hits = sales.filter(promotion__isnull=False).count()
 
     promo_raw = (
@@ -163,11 +208,12 @@ def dashboard(request, supermarket_id):
         .values("discount_type")
         .annotate(count=Count("id"))
     )
+
     promo_labels = [p["discount_type"] for p in promo_raw]
     promo_values = [p["count"] for p in promo_raw]
 
     # ============================
-    # AVERAGE DISCOUNT STRENGTH
+    # AVG DISCOUNT
     # ============================
     discounted = (
         sales.exclude(original_price__isnull=True)
@@ -178,13 +224,14 @@ def dashboard(request, supermarket_id):
     avg_discount = round(discounted.aggregate(avg=Avg("disc"))["avg"] or 0, 2)
 
     # ============================
-    # SALES IMPACT (Stacked)
+    # DISCOUNT IMPACT
     # ============================
     impact_data = sales.aggregate(
         regular=Count("id", filter=Q(triggering_rule__isnull=True) & Q(promotion__isnull=True)),
         rule=Count("id", filter=Q(triggering_rule__isnull=False)),
         promo=Count("id", filter=Q(promotion__isnull=False)),
     )
+
     impact_labels = ["No Discount", "Rule-Based", "Promotion"]
     impact_values = [
         impact_data["regular"],
@@ -204,7 +251,6 @@ def dashboard(request, supermarket_id):
         "fresh": fresh,
         "total_revenue": total_revenue,
         "total_units_sold": total_units_sold,
-
         "active_rules": active_rules,
         "active_promos": active_promos,
         "rule_impacts": rule_impacts,
@@ -214,7 +260,7 @@ def dashboard(request, supermarket_id):
         # Records
         "competitor_records": competitor_records,
 
-        # Charts JSON
+        # Charts
         "expiry_data": json.dumps([expired, expiring, fresh]),
         "cat_labels": json.dumps(cat_labels),
         "cat_values": json.dumps(cat_values),
@@ -223,17 +269,29 @@ def dashboard(request, supermarket_id):
         "supplier_values": json.dumps(supplier_values),
         "rack_labels": json.dumps(rack_labels),
         "rack_values": json.dumps(rack_values),
-
         "rule_labels": json.dumps(rule_labels),
         "rule_values": json.dumps(rule_values),
         "promo_labels": json.dumps(promo_labels),
         "promo_values": json.dumps(promo_values),
-
         "impact_labels": json.dumps(impact_labels),
         "impact_values": json.dumps(impact_values),
+        "total_wastage_loss": round(float(total_wastage_loss), 2),
+
+        "wastage_cat_labels": json.dumps(wastage_cat_labels),
+        "wastage_cat_values": json.dumps(wastage_cat_values),
+
+        "discount_split_labels": json.dumps(
+            ["Full Price Sales", "Discounted Sales"]
+        ),
+        "discount_split_values": json.dumps(discount_split_values),
+
+        "sales_vs_wastage": json.dumps(sales_vs_wastage),
     }
 
+
+
     return render(request, "analytics/dashboard.html", context)
+
 
 
 @login_required
