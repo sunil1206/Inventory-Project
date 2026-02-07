@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'order',
     'competitor',
     'analytics',
+    'expiry_ai',
 
 'rest_framework',
     # 'account',

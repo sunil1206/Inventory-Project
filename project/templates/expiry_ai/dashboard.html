@@ -1,0 +1,52 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}AI Expiry Suggestions{% endblock %}
+{% block header %}AI-Assisted Expiry Suggestions{% endblock %}
+
+{% block content %}
+
+<p class="text-sm text-gray-600 mb-6">
+    AI-assisted expiry suggestions based on inventory data across all stores.
+    These are recommendations only and do not trigger automated actions.
+</p>
+
+{% if recommendations %}
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {% for item in recommendations %}
+            <div class="bg-white rounded-lg shadow p-4">
+                <img src="{{ item.product.display_image_url }}"
+                     class="h-32 w-full object-contain mb-3 rounded">
+
+                <h3 class="font-semibold text-gray-800">
+                    {{ item.product.name }}
+                </h3>
+
+                <p class="text-xs text-gray-500">
+                    Barcode: {{ item.product.barcode }}
+                </p>
+
+                <p class="mt-2 text-sm text-orange-600 font-semibold">
+                    Suggested Risk: {{ item.risk_level }}
+                </p>
+
+                <p class="text-sm text-gray-600">
+                    Estimated Expiry: {{ item.expiry_date }}
+                </p>
+
+                <p class="text-xs mt-2 text-gray-500">
+                    Reason: {{ item.reason }}
+                </p>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="bg-white p-6 rounded-lg shadow-sm text-center text-gray-600">
+        <i class="fas fa-check-circle text-green-500 text-3xl mb-3"></i>
+        <p class="font-semibold">No AI recommendations available</p>
+        <p class="text-sm mt-1">
+            Current inventory data does not indicate any high-risk expiry patterns.
+        </p>
+    </div>
+{% endif %}
+
+{% endblock %}
