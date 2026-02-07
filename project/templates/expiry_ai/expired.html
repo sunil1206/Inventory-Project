@@ -1,0 +1,29 @@
+{% extends "inventory/base.html" %}
+{% block title %}Expired Products{% endblock %}
+{% block header %}Expired Products – {{ supermarket.name }}{% endblock %}
+
+{% block content %}
+<p class="text-sm text-gray-600 mb-6">
+    Showing expired products from the last 30 days only.
+</p>
+
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    {% for item in expired_items %}
+    <div class="bg-red-50 border border-red-200 rounded-lg p-4 shadow">
+        <img src="{{ item.product.display_image_url }}"
+             class="h-32 w-full object-contain mb-3 rounded">
+
+        <h3 class="font-semibold text-red-800">{{ item.product.name }}</h3>
+        <p class="text-xs text-gray-600">{{ item.product.barcode }}</p>
+
+        <p class="mt-2 text-sm text-red-700">
+            Expired on {{ item.expiry_date }}
+        </p>
+
+        <p class="text-sm">Qty: {{ item.quantity }}</p>
+    </div>
+    {% empty %}
+    <p class="text-gray-500">No expired products in last 30 days.</p>
+    {% endfor %}
+</div>
+{% endblock %}
